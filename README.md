@@ -1,6 +1,6 @@
 # Process Management System — Node.js Backend + n8n
 
-> Backend (`nodeapp`) for communication with n8n and PostgreSQL + n8n environment with custom node deployment script.
+> Project is in active development.
 
 ![status](https://img.shields.io/badge/status-active-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D18.x-339933?logo=node.js)
