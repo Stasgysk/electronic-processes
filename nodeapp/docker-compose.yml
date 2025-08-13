@@ -1,0 +1,12 @@
+version: "3.8"
+
+networks:
+  default:
+    external:
+      name: n8n-postgres-node-network
+
+services:
+  nodeapp:
+    build: .
+    ports:
+      - "3000:3000"

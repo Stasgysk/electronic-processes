@@ -20,3 +20,5 @@
 
 **/.tmp/
 **/tmp/
+/nodeapp/cert/server.key
+/nodeapp/cert/server.cert
