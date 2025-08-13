@@ -50,6 +50,7 @@ flowchart LR
     NodeApp --- PG
 
     subgraph Docker
+      NodeApp
       N8N
       PG
     end
