@@ -1,0 +1,26 @@
+.blur-background {
+    position: fixed;
+    inset: 0;
+    backdrop-filter: blur(8px);
+    background-color: rgba(0, 0, 0, 0.3);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.group-selector-window {
+    background-color: white;
+    border-radius: 12px;
+    padding: 24px;
+    min-width: 300px;
+    max-width: 90%;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 1001;
+}
+
+.group-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}

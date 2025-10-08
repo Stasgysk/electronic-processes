@@ -22,9 +22,16 @@ module.exports = (sequelize, DataTypes, name) => {
             allowNull: false,
         },
     }, {
-        tableName: name,
+        tableName: "processes_statuses",
+        underscored: true,
         timestamps: true,
-        paranoid: true
+        paranoid: true,
+        indexes: [
+            { fields: ['process_id'] },
+            { fields: ['init_user_id'] },
+            { fields: ['status'] },
+            { fields: ['process_id', 'init_user_id'] },
+        ],
     });
 
     entity.associate = (models) => {

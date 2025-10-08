@@ -29,15 +29,28 @@ module.exports = (sequelize, DataTypes, name) => {
             type: DataTypes.INTEGER,
             allowNull: false,
         },
+        usersEmails: {
+            type: DataTypes.TEXT,
+            allowNull: true,
+            default: "",
+        },
         isStartingNode: {
             type: DataTypes.BOOLEAN,
             allowNull: false,
             defaultValue: false,
         }
     }, {
-        tableName: name,
+        tableName: "forms",
+        underscored: true,
         timestamps: true,
-        paranoid: true
+        paranoid: true,
+        indexes: [
+            { fields: ['form_id'] },
+            { fields: ['process_id'] },
+            { fields: ['user_group_id'] },
+            { fields: ['is_starting_node'] },
+            { fields: ['process_id', 'user_group_id'] },
+        ],
     });
 
     entity.associate = (models) => {

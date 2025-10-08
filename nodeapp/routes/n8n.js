@@ -14,19 +14,7 @@ let nanoid;
     nanoid = nanoidFn;
 })();
 let router = express.Router();
-
-const authCookie = axios.post(
-    `${process.env.N8N_BASE_URL}rest/login`,
-    {
-        emailOrLdapLoginId: process.env.N8N_API_USER_EMAIL,
-        password: process.env.N8N_API_USER_PASSWORD,
-    },
-    { withCredentials: true }
-).then(r => {
-    const cookieHeader = r.headers['set-cookie'];
-    return cookieHeader.find(c => c.startsWith('n8n-auth='));
-});
-
+const { getAuthCookie } = require('../utils/getAuthCookie');
 
 /* GET n8n workflow entity by id */
 router.get('/:id', async function (req, res, next) {
@@ -212,7 +200,7 @@ async function updateOrCreateProcessWorkflowEntity(processWorkflow, newData, ver
             { active: true },
             {
                 headers: {
-                    Cookie: authCookie
+                    Cookie: await getAuthCookie()
                 }
             }
         );

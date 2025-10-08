@@ -121,12 +121,15 @@ export class FormStartNode implements INodeType {
 
 		const response = await this.helpers.request({
 			method: 'POST',
-			url: `https://nodeapp:3000/processes`,
+			url: `https://nodeapp:4000/processes`,
 			json: true,
 			body: {
 				"name": name,
 				"processGroupName": formProcessGroup,
 				"processTypeName": selectedProcessType
+			},
+			headers: {
+				'X-Service-Auth': env.INTERNAL_SECRET,
 			},
 			rejectUnauthorized: env.IS_PROD === "true",
 		});

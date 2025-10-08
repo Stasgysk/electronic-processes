@@ -47,6 +47,7 @@ services:
       N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL}
+      INTERNAL_SECRET: c6638a9e5c4074ab4199907ad1768252
     depends_on:
       postgres:
         condition: service_healthy

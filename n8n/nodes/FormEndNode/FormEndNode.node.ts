@@ -44,9 +44,12 @@ export class FormEndNode implements INodeType {
 
 		await this.helpers.request({
 			method: 'POST',
-			url: `https://nodeapp:3000/n8n/${processId}`,
+			url: `https://nodeapp:4000/n8n/${processId}`,
 			json: true,
 			body: {},
+			headers: {
+				'X-Service-Auth': env.INTERNAL_SECRET,
+			},
 			rejectUnauthorized: env.IS_PROD === "true",
 		});
 

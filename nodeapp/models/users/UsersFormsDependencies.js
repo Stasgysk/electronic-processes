@@ -17,9 +17,15 @@ module.exports = (sequelize, DataTypes, name) => {
             allowNull: false,
         },
     }, {
-        tableName: name,
+        tableName: "users_forms_dependencies",
+        underscored: true,
         timestamps: true,
-        paranoid: true
+        paranoid: true,
+        indexes: [
+            { fields: ['user_id'] },
+            { fields: ['form_id'] },
+            { unique: true, fields: ['user_id', 'form_id'] },
+        ],
     });
 
     entity.associate = (models) => {

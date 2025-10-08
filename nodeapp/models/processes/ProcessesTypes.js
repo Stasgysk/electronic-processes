@@ -16,9 +16,13 @@ module.exports = (sequelize, DataTypes, name) => {
             }
         },
     }, {
-        tableName: name,
+        tableName: "processes_types",
+        underscored: true,
         timestamps: true,
-        paranoid: true
+        paranoid: true,
+        indexes: [
+            { fields: ['name'] },
+        ],
     });
 
     entity.associate = (models) => {

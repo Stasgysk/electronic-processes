@@ -1,0 +1,10 @@
+.App {
+  text-align: center;
+}
+
+.App-main {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: left; /* чтобы текст был слева */
+}

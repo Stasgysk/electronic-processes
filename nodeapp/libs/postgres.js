@@ -97,6 +97,7 @@ const initDatabase = async (sequelize, database) => {
             is_force_enable = false;
         }
 
+
         // just in case someone is not reading env comments :D
         if(process.env.NODE_ENV === 'prod' || process.env.NODE_ENV.includes("prod")) {
             is_force_enable = false;

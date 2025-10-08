@@ -19,9 +19,16 @@ module.exports = (sequelize, DataTypes, name) => {
             allowNull: false,
         }
     }, {
-        tableName: name,
+        tableName: "forms_dependencies",
+        underscored: true,
         timestamps: true,
-        paranoid: true
+        paranoid: true,
+        indexes: [
+            { fields: ['process_id'] },
+            { fields: ['form_id'] },
+            { fields: ['prev_form_id'] },
+            { unique: true, fields: ['process_id', 'form_id', 'prev_form_id'] },
+        ],
     });
 
     entity.entity = async (where = null, eager = false) => {

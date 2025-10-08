@@ -23,9 +23,15 @@ module.exports = (sequelize, DataTypes, name) => {
             unique: true,
         }
     }, {
-        tableName: name,
+        tableName: "users",
+        underscored: true,
         timestamps: true,
-        paranoid: true
+        paranoid: true,
+        indexes: [
+            { unique: true, fields: ['name'] },
+            { unique: true, fields: ['email'] },
+            { fields: ['user_group_id'] },
+        ],
     });
 
     entity.associate = (models) => {

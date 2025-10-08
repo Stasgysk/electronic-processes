@@ -42,9 +42,17 @@ module.exports = (sequelize, DataTypes, name) => {
             allowNull: false,
         }
     }, {
-        tableName: name,
+        tableName: "forms_statuses",
+        underscored: true,
         timestamps: true,
         paranoid: true,
+        indexes: [
+            { fields: ['form_status_id'] },
+            { fields: ['form_id'] },
+            { fields: ['filled_user_id'] },
+            { fields: ['process_status_id'] },
+            { fields: ['form_id', 'form_status_id'] },
+        ],
     });
 
     entity.associate = (models) => {

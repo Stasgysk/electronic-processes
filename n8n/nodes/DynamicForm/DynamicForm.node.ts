@@ -214,8 +214,11 @@ export class DynamicForm implements INodeType {
 				const env = process.env;
 				const response = await this.helpers.request({
 					method: 'GET',
-					url: 'https://nodeapp:3000/usersGroups',
+					url: 'https://nodeapp:4000/usersGroups',
 					json: true,
+					headers: {
+						'X-Service-Auth': env.INTERNAL_SECRET,
+					},
 					rejectUnauthorized: env.IS_PROD === "true",
 				});
 
@@ -299,8 +302,11 @@ export class DynamicForm implements INodeType {
 
 		const response = await this.helpers.request({
 			method: 'GET',
-			url: `https://nodeapp:3000/n8n/${workflowId}/${nodeName}`,
+			url: `https://nodeapp:4000/n8n/${workflowId}/${nodeName}`,
 			json: true,
+			headers: {
+				'X-Service-Auth': env.INTERNAL_SECRET,
+			},
 			rejectUnauthorized: env.IS_PROD === "true",
 		});
 
@@ -333,7 +339,7 @@ export class DynamicForm implements INodeType {
 
 		await this.helpers.request({
 			method: 'POST',
-			url: `https://nodeapp:3000/forms`,
+			url: `https://nodeapp:4000/forms`,
 			json: true,
 			body: {
 				"formName": nodeName,
@@ -343,6 +349,9 @@ export class DynamicForm implements INodeType {
 				"prevFormIds": prevNodeIds,
 				"userGroupName": userGroup,
 				"userEmails": userEmails
+			},
+			headers: {
+				'X-Service-Auth': env.INTERNAL_SECRET,
 			},
 			rejectUnauthorized: env.IS_PROD === "true",
 		});

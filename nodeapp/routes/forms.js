@@ -41,7 +41,6 @@ router.get('/:id', async function (req, res, next) {
 /* POST create new form */
 router.post('/', async function (req, res, next) {
     try {
-        logger.debug(req.body);
         const {formName, formId, formData, processId, prevFormIds, userGroupName, userEmails} = req.body;
 
         if(!formName || !formId || !formData || formData.length === 0 || !processId || !userGroupName || userGroupName.length === 0) {
@@ -102,6 +101,7 @@ router.post('/', async function (req, res, next) {
             ifFormExists.formData = formData;
             ifFormExists.userGroupId = userGroup.dataValues.id;
             ifFormExists.isStartingNode = !prevFormIds;
+            ifFormExists.usersEmails = userEmails;
 
             await ifFormExists.save();
 
@@ -116,6 +116,7 @@ router.post('/', async function (req, res, next) {
                 processId: processId,
                 userGroupId: userGroup.dataValues.id,
                 isStartingNode: !prevFormIds,
+                usersEmails: userEmails,
             }
 
             const form = await postgres.Forms.create(newFormData);

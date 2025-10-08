@@ -1,6 +1,6 @@
 {
   "name": "TemplateProcessWorkflow",
-  "active": true,
+  "active": false,
   "nodes": [
     {
       "parameters": {
@@ -142,6 +142,15 @@
         "url": "=http://localhost:5678/webhook/{{ $json.formStatusId }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Service-Auth",
+              "value": "c6638a9e5c4074ab4199907ad1768252"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n    \"isFirstNode\": false,\n    \"nextNodesIds\": [\n        {\n            \"formProcessId\": {{ $json.formProcessId }},\n            \"formStatusId\": \"{{ $json.formStatusId }}\"\n        }\n    ]\n}",
@@ -165,7 +174,16 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://nodeapp:3000/formsStatuses/webhookUrl",
+        "url": "https://nodeapp:4000/formsStatuses/webhookUrl",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Service-Auth",
+              "value": "c6638a9e5c4074ab4199907ad1768252"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"resumeUrl\": \"{{ $json.resumeUrl }}\",\n  \"formStatusId\": \"{{ $json.nextNodesIds[0].formStatusId }}\",\n  \"formProcessId\": {{ $json.nextNodesIds[0].formProcessId }}\n}",
@@ -363,7 +381,7 @@
   },
   "staticData": null,
   "pinData": {},
-  "versionId": "c0912029-bc95-447b-bee6-eb480e92c987",
+  "versionId": "ae6d5e88-324c-4d57-a126-065b1de08998",
   "triggerCount": 1,
   "id": "iZsPXFtlv9LCkq7M",
   "meta": {
@@ -371,5 +389,5 @@
   },
   "parentFolderId": null,
   "isArchived": false,
-  "lastUpdated": "2025-08-13T18:22:05.740Z"
+  "lastUpdated": "2025-10-05T21:52:34.366Z"
 }
