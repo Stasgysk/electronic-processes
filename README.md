@@ -1,228 +1,247 @@
-# Process Management System — Node.js Backend + n8n
+![Banner image](https://user-images.githubusercontent.com/10284570/173569848-c624317f-42b1-45a6-ab09-f0ea3c247648.png)
 
-> Project is in active development.
+# n8n-nodes-starter
 
-![status](https://img.shields.io/badge/status-active-brightgreen)
-![node](https://img.shields.io/badge/node-%3E%3D18.x-339933?logo=node.js)
-![license](https://img.shields.io/badge/license-MIT-blue)
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-    - [Environment Variables for `nodeapp`](#environment-variables-for-nodeapp)
-    - [Environment Variables for `n8n`/PostgreSQL](#environment-variables-for-n8npostgresql)
-- [Running the Project](#running-the-project)
-    - [Run the Backend](#run-the-backend)
-    - [Run n8n + PostgreSQL (Docker)](#run-n8n--postgresql-docker)
-    - [Deploy Custom Nodes to n8n](#deploy-custom-nodes-to-n8n)
-- [Backend API (Examples)](#backend-api-examples)
-- [Working with Custom Nodes](#working-with-custom-nodes)
-- [Logging & Diagnostics](#logging--diagnostics)
-- [License](#license)
-
----
-
-## Overview
-
-This project comprises two main components:
-
-1. **Node.js Backend (**`nodeapp`**)** — A REST/HTTP service that:
-    - Handles requests from external clients or systems.
-    - Communicates with n8n via HTTP API or webhooks.
-    - Stores events and results in a PostgreSQL database.
-2. **n8n + PostgreSQL** — A workflow automation platform with data persistence in PostgreSQL, deployed via Docker. Includes a `deploy_node.sh` script for uploading and updating custom n8n nodes.
-
----
-
-## Architecture
-
-```mermaid
-flowchart LR
-    Client[Client / Integrations] -- HTTP/JSON --> NodeApp[Node.js Backend]
-    NodeApp -- Webhook/API --> N8N[n8n]
-    N8N --- PG[(PostgreSQL)]
-    NodeApp --- PG
-
-    subgraph Docker
-      NodeApp
-      N8N
-      PG
-    end
-```
-
----
-
-## Project Structure
-
-```
-project-root/
-│
-├─ nodeapp/                     # Node.js backend
-│  ├─ bin/www                   # Starts HTTP server
-│  ├─ config/config.example.js  # Example config
-│  ├─ enums/                    # App enums
-│  ├─ libs/                     # App libs
-│  ├─ models/                   # DB models
-│  ├─ routes/                   # App routes
-│  ├─ utils/                    # App utils
-│  ├─ workflows/                # N8N workflow templates
-│  ├─ app.js/                   # App main script
-│  ├─ server.js/                # App server start
-│  ├─ package.json              # Dependencies and scripts
-│  ├─ docker-compose.yml        # Node.js configuration
-│  └─ ...
-│
-├─ n8n/                     # n8n environment + custom nodes
-│  ├─ docker-compose.yml    # n8n + PostgreSQL configuration
-│  ├─ nodes/                # Custom n8n nodes
-│  └─ deploy_node.sh        # Script to deploy custom nodes
-│
-└─ README.md
-```
-
----
+This starter repository helps you build custom integrations for [n8n](https://n8n.io). It includes example nodes, credentials, the node linter, and all the tooling you need to get started.
 
 ## Quick Start
 
-1. **Prepare environment variables**:
+> [!TIP]
+> **New to building n8n nodes?** The fastest way to get started is with `npm create @n8n/node`. This command scaffolds a complete node package for you using the [@n8n/node-cli](https://www.npmjs.com/package/@n8n/node-cli).
 
-   ```bash
-   cp nodeapp/.env.example nodeapp/.env
-   cp n8n/.env.example n8n/.env
-   ```
-
-2. **Start n8n + PostgreSQL (Docker)**:
-
-   ```bash
-   cd n8n
-   docker-compose up -d
-   ```
-
-3. **Run the backend Node.js**:
-
-   ```bash
-   cd ../nodeapp
-   docker-compose up -d
-   ```
-
-- **n8n default URL**: `http://localhost:5678`
-- **Backend default URL**: `http://localhost:3000`
-
----
-
-## Configuration
-
-### Environment Variables for `nodeapp`
-
-Create `nodeapp/.env`:
-
-```
-#  Can be set from the list: dev, test, prod.
-NODE_ENV=
-
-DB_PROVIDER=
-
-LOG_LEVEL=
-
-# FORCE_SYNC_DB should be false for prod env
-FORCE_SYNC_DB=
-NO_FORCE_SYNC_DB=
-
-TUKE_SSO2_ACCESS_TOKEN=
-TUKE_USER_GROUPS=STUDENT,DOCTORAL,PROFESSOR,STAFF
-
-N8N_API_KEY=
-N8N_CONTAINER_NAME=
-N8N_BASE_URL=
-N8N_AUTH_USER=
-N8N_AUTH_PASSWORD=
-N8N_API_USER_EMAIL=
-N8N_API_USER_PASSWORD=
-```
-
-### Environment Variables for `n8n`/PostgreSQL
-
-Set in `n8n/.env`:
-
-```
-# ENV VARIABLES
-IS_PROD=false
-
-# DB
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=n8n
-
-# n8n
-N8N_HOST=localhost
-N8N_PORT=5678
-N8N_BASIC_AUTH_USER=admin
-N8N_BASIC_AUTH_PASSWORD=adminpassword
-N8N_ENCRYPTION_KEY=supersecretkey
-N8N_EDITOR_BASE_URL=http://localhost:5678
-
-```
-
----
-
-## Running the Project
-
-### Run the Backend
+**To create a new node package from scratch:**
 
 ```bash
-cd nodeapp
-docker-compose up -d
+npm create @n8n/node
 ```
 
-### Run n8n + PostgreSQL (Docker)
+**Already using this starter? Start developing with:**
 
 ```bash
-cd n8n
-docker-compose up -d
+npm run dev
 ```
 
-n8n will be accessible at `http://localhost:5678`.
+This starts n8n with your nodes loaded and hot reload enabled.
 
-### Deploy Custom Nodes to n8n
+## What's Included
+
+This starter repository includes two example nodes to learn from:
+
+- **[Example Node](nodes/Example/)** - A simple starter node that shows the basic structure with a custom `execute` method
+- **[GitHub Issues Node](nodes/GithubIssues/)** - A complete, production-ready example built using the **declarative style**:
+  - **Low-code approach** - Define operations declaratively without writing request logic
+  - Multiple resources (Issues, Comments)
+  - Multiple operations (Get, Get All, Create)
+  - Two authentication methods (OAuth2 and Personal Access Token)
+  - List search functionality for dynamic dropdowns
+  - Proper error handling and typing
+  - Ideal for HTTP API-based integrations
+
+> [!TIP]
+> The declarative/low-code style (used in GitHub Issues) is the recommended approach for building nodes that interact with HTTP APIs. It significantly reduces boilerplate code and handles requests automatically.
+
+Browse these examples to understand both approaches, then modify them or create your own.
+
+## Finding Inspiration
+
+Looking for more examples? Check out these resources:
+
+- **[npm Community Nodes](https://www.npmjs.com/search?q=keywords:n8n-community-node-package)** - Browse thousands of community-built nodes on npm using the `n8n-community-node-package` tag
+- **[n8n Built-in Nodes](https://github.com/n8n-io/n8n/tree/master/packages/nodes-base/nodes)** - Study the source code of n8n's official nodes for production-ready patterns and best practices
+- **[n8n Credentials](https://github.com/n8n-io/n8n/tree/master/packages/nodes-base/credentials)** - See how authentication is implemented for various services
+
+These are excellent resources to understand how to structure your nodes, handle different API patterns, and implement advanced features.
+
+## Prerequisites
+
+Before you begin, install the following on your development machine:
+
+### Required
+
+- **[Node.js](https://nodejs.org/)** (v22 or higher) and npm
+  - Linux/Mac/WSL: Install via [nvm](https://github.com/nvm-sh/nvm)
+  - Windows: Follow [Microsoft's NodeJS guide](https://learn.microsoft.com/en-us/windows/dev-environment/javascript/nodejs-on-windows)
+- **[git](https://git-scm.com/downloads)**
+
+### Recommended
+
+- Follow n8n's [development environment setup guide](https://docs.n8n.io/integrations/creating-nodes/build/node-development-environment/)
+
+> [!NOTE]
+> The `@n8n/node-cli` is included as a dev dependency and will be installed automatically when you run `npm install`. The CLI includes n8n for local development, so you don't need to install n8n globally.
+
+## Getting Started with this Starter
+
+Follow these steps to create your own n8n community node package:
+
+### 1. Create Your Repository
+
+[Generate a new repository](https://github.com/n8n-io/n8n-nodes-starter/generate) from this template, then clone it:
 
 ```bash
-cd n8n
-./deploy_node.sh
+git clone https://github.com/<your-organization>/<your-repo-name>.git
+cd <your-repo-name>
 ```
 
-This script uploads custom nodes to the n8n container and restarts it.
+### 2. Install Dependencies
 
----
+```bash
+npm install
+```
 
-## Backend API (Examples)
+This installs all required dependencies including the `@n8n/node-cli`.
 
-// TO DO
+### 3. Explore the Examples
 
----
+Browse the example nodes in [nodes/](nodes/) and [credentials/](credentials/) to understand the structure:
 
-## Working with Custom Nodes
+- Start with [nodes/Example/](nodes/Example/) for a basic node
+- Study [nodes/GithubIssues/](nodes/GithubIssues/) for a real-world implementation
 
-Custom nodes are stored in `n8n/nodes/`. To add or update nodes:
+### 4. Build Your Node
 
-1. Place node files in `n8n/nodes/customNode`.
-2. Run `./deploy_node.sh` to upload and apply changes.
-3. Verify nodes in the n8n UI under the nodes panel.
+Edit the example nodes to fit your use case, or create new node files by copying the structure from [nodes/Example/](nodes/Example/).
 
----
+> [!TIP]
+> If you want to scaffold a completely new node package, use `npm create @n8n/node` to start fresh with the CLI's interactive generator.
 
-## Logging & Diagnostics
+### 5. Configure Your Package
 
-- **Backend logs**: Written to console.
-- **n8n logs**: Available via `docker logs n8n`.
+Update `package.json` with your details:
 
----
+- `name` - Your package name (must start with `n8n-nodes-`)
+- `author` - Your name and email
+- `repository` - Your repository URL
+- `description` - What your node does
+
+Make sure your node is registered in the `n8n.nodes` array.
+
+### 6. Develop and Test Locally
+
+Start n8n with your node loaded:
+
+```bash
+npm run dev
+```
+
+This command runs `n8n-node dev` which:
+
+- Builds your node with watch mode
+- Starts n8n with your node available
+- Automatically rebuilds when you make changes
+- Opens n8n in your browser (usually http://localhost:5678)
+
+You can now test your node in n8n workflows!
+
+> [!NOTE]
+> Learn more about CLI commands in the [@n8n/node-cli documentation](https://www.npmjs.com/package/@n8n/node-cli).
+
+### 7. Lint Your Code
+
+Check for errors:
+
+```bash
+npm run lint
+```
+
+Auto-fix issues when possible:
+
+```bash
+npm run lint:fix
+```
+
+### 8. Build for Production
+
+When ready to publish:
+
+```bash
+npm run build
+```
+
+This compiles your TypeScript code to the `dist/` folder.
+
+### 9. Prepare for Publishing
+
+Before publishing:
+
+1. **Update documentation**: Replace this README with your node's documentation. Use [README_TEMPLATE.md](README_TEMPLATE.md) as a starting point.
+2. **Update the LICENSE**: Add your details to the [LICENSE](LICENSE.md) file.
+3. **Test thoroughly**: Ensure your node works in different scenarios.
+
+### 10. Publish to npm
+
+Publish your package to make it available to the n8n community:
+
+```bash
+npm publish
+```
+
+Learn more about [publishing to npm](https://docs.npmjs.com/packages-and-modules/contributing-packages-to-the-registry).
+
+### 11. Submit for Verification (Optional)
+
+Get your node verified for n8n Cloud:
+
+1. Ensure your node meets the [requirements](https://docs.n8n.io/integrations/creating-nodes/deploy/submit-community-nodes/):
+   - Uses MIT license ✅ (included in this starter)
+   - No external package dependencies
+   - Follows n8n's design guidelines
+   - Passes quality and security review
+
+2. Submit through the [n8n Creator Portal](https://creators.n8n.io/nodes)
+
+**Benefits of verification:**
+
+- Available directly in n8n Cloud
+- Discoverable in the n8n nodes panel
+- Verified badge for quality assurance
+- Increased visibility in the n8n community
+
+## Available Scripts
+
+This starter includes several npm scripts to streamline development:
+
+| Script                | Description                                                      |
+| --------------------- | ---------------------------------------------------------------- |
+| `npm run dev`         | Start n8n with your node and watch for changes (runs `n8n-node dev`) |
+| `npm run build`       | Compile TypeScript to JavaScript for production (runs `n8n-node build`) |
+| `npm run build:watch` | Build in watch mode (auto-rebuild on changes)                    |
+| `npm run lint`        | Check your code for errors and style issues (runs `n8n-node lint`) |
+| `npm run lint:fix`    | Automatically fix linting issues when possible (runs `n8n-node lint --fix`) |
+| `npm run release`     | Create a new release (runs `n8n-node release`)                   |
+
+> [!TIP]
+> These scripts use the [@n8n/node-cli](https://www.npmjs.com/package/@n8n/node-cli) under the hood. You can also run CLI commands directly, e.g., `npx n8n-node dev`.
+
+## Troubleshooting
+
+### My node doesn't appear in n8n
+
+1. Make sure you ran `npm install` to install dependencies
+2. Check that your node is listed in `package.json` under `n8n.nodes`
+3. Restart the dev server with `npm run dev`
+4. Check the console for any error messages
+
+### Linting errors
+
+Run `npm run lint:fix` to automatically fix most common issues. For remaining errors, check the [n8n node development guidelines](https://docs.n8n.io/integrations/creating-nodes/).
+
+### TypeScript errors
+
+Make sure you're using Node.js v22 or higher and have run `npm install` to get all type definitions.
+
+## Resources
+
+- **[n8n Node Documentation](https://docs.n8n.io/integrations/creating-nodes/)** - Complete guide to building nodes
+- **[n8n Community Forum](https://community.n8n.io/)** - Get help and share your nodes
+- **[@n8n/node-cli Documentation](https://www.npmjs.com/package/@n8n/node-cli)** - CLI tool reference
+- **[n8n Creator Portal](https://creators.n8n.io/nodes)** - Submit your node for verification
+- **[Submit Community Nodes Guide](https://docs.n8n.io/integrations/creating-nodes/deploy/submit-community-nodes/)** - Verification requirements and process
+
+## Contributing
+
+Have suggestions for improving this starter? [Open an issue](https://github.com/n8n-io/n8n-nodes-starter/issues) or submit a pull request!
 
 ## License
 
-MIT License — you are free to use, modify, and distribute this project.
+[MIT](https://github.com/n8n-io/n8n-nodes-starter/blob/master/LICENSE.md)

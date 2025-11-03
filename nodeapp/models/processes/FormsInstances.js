@@ -15,7 +15,7 @@ module.exports = (sequelize, DataTypes, name) => {
                 notEmpty: true,
             },
         },
-        formStatusId: {
+        formInstanceId: {
             type: DataTypes.TEXT,
             allowNull: false,
         },
@@ -37,28 +37,28 @@ module.exports = (sequelize, DataTypes, name) => {
             type: DataTypes.TEXT,
             allowNull: false,
         },
-        processStatusId: {
+        processInstanceId: {
             type: DataTypes.INTEGER,
             allowNull: false,
         }
     }, {
-        tableName: "forms_statuses",
+        tableName: "forms_instances",
         underscored: true,
         timestamps: true,
         paranoid: true,
         indexes: [
-            { fields: ['form_status_id'] },
+            { fields: ['form_instance_id'] },
             { fields: ['form_id'] },
             { fields: ['filled_user_id'] },
-            { fields: ['process_status_id'] },
-            { fields: ['form_id', 'form_status_id'] },
+            { fields: ['process_instance_id'] },
+            { fields: ['form_id', 'form_instance_id'] },
         ],
     });
 
     entity.associate = (models) => {
-        entity.belongsTo(models.ProcessesStatuses, {
-            foreignKey: 'formStatusId',
-            as: 'processStatus'
+        entity.belongsTo(models.ProcessesInstances, {
+            foreignKey: 'formInstanceId',
+            as: 'processInstance'
         });
         entity.belongsTo(models.Forms, {
             foreignKey: 'formId',
@@ -77,8 +77,8 @@ module.exports = (sequelize, DataTypes, name) => {
         if(eager) {
             include = [
                 {
-                    model: entity.associations.processStatus.target,
-                    as: 'processStatus',
+                    model: entity.associations.processInstances.target,
+                    as: 'processInstance',
                 },
                 {
                     model: entity.associations.form.target,
@@ -104,8 +104,8 @@ module.exports = (sequelize, DataTypes, name) => {
         if(eager) {
             include = [
                 {
-                    model: entity.associations.processStatus.target,
-                    as: 'processStatus',
+                    model: entity.associations.processInstances.target,
+                    as: 'processInstance',
                 },
                 {
                     model: entity.associations.form.target,

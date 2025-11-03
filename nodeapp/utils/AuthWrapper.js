@@ -18,6 +18,8 @@ const authWrapper = ({
 
         if (isExcluded) return next();
 
+        logger.debug(isInternalRequest);
+        logger.debug(internalKey);
         if (isInternalRequest) {
             req.authType = 'internal';
             return next();

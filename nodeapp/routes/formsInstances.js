@@ -6,19 +6,20 @@ let express = require('express');
 const routesUtils = require("../utils/RoutesUtils");
 let router = express.Router();
 const formStatuses = require('../enums/FormStatuses');
-const processStatuses = require('../enums/ProcessesStatusesStatuses');
+const processInstances = require('../enums/ProcessesInstancesStatuses');
 const {post} = require("axios");
+const processesStatuses = require("../enums/FormStatuses");
 
 /* GET all forms statuses */
 router.get('/', async function (req, res, next) {
     try {
         const {eager, length, offset} = routesUtils.getDefaultRequestParams(req);
 
-        const formsStatuses = await postgres.FormsStatuses.entities(null, eager, null, length, offset);
-        return res.status(200).json(resBuilder.success(formsStatuses));
+        const formsInstances = await postgres.FormsInstances.entities(null, eager, null, length, offset);
+        return res.status(200).json(resBuilder.success(formsInstances));
     } catch (e) {
         logger.error(e);
-        return res.status(500).json(resBuilder.error("Something went wrong, while getting all forms statuses"));
+        return res.status(500).json(resBuilder.error("Something went wrong, while getting all forms instances"));
     }
 });
 
@@ -27,15 +28,15 @@ router.get('/:id', async function (req, res, next) {
     try {
         const {eager} = routesUtils.getDefaultRequestParams(req);
 
-        const formStatusId = req.params.id;
-        const formStatus = await postgres.Forms.entity({id: formStatusId}, eager);
+        const formInstanceId = req.params.id;
+        const form = await postgres.Forms.entity({id: formInstanceId}, eager);
 
-        if(!formStatus) {
-            logger.error("Form status not found");
+        if(!form) {
+            logger.error("Form not found");
             return res.status(400).json(resBuilder.fail("Bad request."));
         }
 
-        return res.status(200).json(resBuilder.success(formStatus));
+        return res.status(200).json(resBuilder.success(form));
     } catch (e) {
         logger.error(e);
         return res.status(500).json(resBuilder.error("Something went wrong, while getting form status by id"));
@@ -45,7 +46,7 @@ router.get('/:id', async function (req, res, next) {
 /* POST create new form status or update form status*/
 router.post('/', async function (req, res, next) {
     try {
-        const {formData, formId, userId, processStatusId} = req.body;
+        const {formData, formId, userId, processInstanceId} = req.body;
 
         if(!formData || formData.length === 0 || !formId || !userId) {
             logger.error("Required fields are not present");
@@ -60,44 +61,44 @@ router.post('/', async function (req, res, next) {
             isFormStartingForm = true;
         }
 
-        const formStatusId = form.dataValues.formId;
+        const formInstanceId = form.dataValues.formId;
 
-        if(isFormStartingForm && !processStatusId) {
+        if(isFormStartingForm && !processInstanceId) {
             const processStatusData = {
                 "processId": form.dataValues.processId,
-                "status": processStatuses.PROCESSING,
+                "status": processInstances.PROCESSING,
                 "initUserId": userId,
             }
-            const processStatus = await postgres.ProcessesStatuses.create(processStatusData);
+            const processStatus = await postgres.ProcessesInstances.create(processStatusData);
 
-            const formStatusData = {
+            const formInstanceData = {
                 formData: formData,
                 formId: formId,
-                formStatusId: formStatusId,
+                formInstanceId: formInstanceId,
                 filledUserId: userId,
                 status: formStatuses.FILLED,
                 webhookUrl: "empty",
-                processStatusId: processStatus.dataValues.id
+                processInstanceId: processStatus.dataValues.id
             }
-            const formStatus = await postgres.FormsStatuses.create(formStatusData);
+            const formInstance = await postgres.FormsInstances.create(formInstanceData);
 
-            await createFollowUpFormsStatuses(formId, formStatusId, processStatus.dataValues.id);
+            await createFollowUpFormsStatuses(formId, formInstanceId, processStatus.dataValues.id);
 
-            return res.status(200).json(resBuilder.success(formStatus));
-        } else if(!isFormStartingForm && processStatusId) {
-            let formStatus = await postgres.FormsStatuses.entity({formStatusId: formStatusId, formId: formId, processStatusId: processStatusId});
-            if(formStatus.dataValues.status !== formStatuses.WAITING) {
+            return res.status(200).json(resBuilder.success(formInstance));
+        } else if(!isFormStartingForm && processInstanceId) {
+            let formInstance = await postgres.FormsInstances.entity({formInstanceId: formInstanceId, formId: formId, processInstanceId: processInstanceId});
+            if(formInstance.dataValues.status !== formStatuses.WAITING) {
                 logger.info("Form is not in waiting state, cannot be filled");
                 return res.status(400).json(resBuilder.fail("Form is not in waiting state, cannot be filled"));
             }
 
-            formStatus.formData = formData;
-            formStatus.filledUserId = userId;
-            formStatus.status = formStatuses.FILLED;
+            formInstance.formData = formData;
+            formInstance.filledUserId = userId;
+            formInstance.status = formStatuses.FILLED;
 
-            await formStatus.save();
+            await formInstance.save();
 
-            const nextForms = await postgres.FormsDependencies.entities({prevFormId: formStatus.dataValues.formStatusId});
+            const nextForms = await postgres.FormsDependencies.entities({prevFormId: formInstance.dataValues.formInstanceId});
             const nextFormsIds = [];
 
             for(let nextForm of nextForms) {
@@ -110,28 +111,28 @@ router.post('/', async function (req, res, next) {
                 const prevForms = await postgres.FormsDependencies.entities({formId: nextFormId});
 
                 for(let prevForm of prevForms) {
-                    const prevFormStatus = await postgres.FormsStatuses.entity({formStatusId: prevForm.dataValues.prevFormId, processStatusId: processStatusId});
+                    const prevFormInstance = await postgres.FormsInstances.entity({formInstanceId: prevForm.dataValues.prevFormId, processInstanceId: processInstanceId});
 
-                    if(prevFormStatus.dataValues.status !== formStatuses.FILLED) {
+                    if(prevFormInstance.dataValues.status !== formStatuses.FILLED) {
                         isPrevFormsFilled = false;
                         break;
                     }
                 }
 
                 if(isPrevFormsFilled) {
-                    const nextForm = await postgres.FormsStatuses.entity({formStatusId: nextFormId, processStatusId: processStatusId});
+                    const nextForm = await postgres.FormsInstances.entity({formInstanceId: nextFormId, processInstanceId: processInstanceId});
 
                     nextForm.status = formStatuses.WAITING;
                     nextWaitingFormsIds.push({
                         "formProcessId": nextForm.dataValues.id,
-                        "formStatusId": nextForm.dataValues.formStatusId,
+                        "formInstanceId": nextForm.dataValues.formInstanceId,
                     });
                     await nextForm.save();
                 }
             }
 
             await axios.post(
-                formStatus.webhookUrl.replace('localhost', process.env.N8N_CONTAINER_NAME),
+                formInstance.webhookUrl.replace('localhost', process.env.N8N_CONTAINER_NAME),
                 {
                     "isFirstNode": false,
                     "nextNodesIds": nextWaitingFormsIds
@@ -144,9 +145,11 @@ router.post('/', async function (req, res, next) {
                 }
             );
 
-            return res.status(200).json(resBuilder.success(formStatus));
+            await isProcessFinished(processInstanceId);
+
+            return res.status(200).json(resBuilder.success(formInstance));
         } else {
-            logger.error(`Process ID: ${processStatusId}, is start form? ${isFormStartingForm}`);
+            logger.error(`Process ID: ${processInstanceId}, is start form? ${isFormStartingForm}`);
             return res.status(400).json(resBuilder.fail("Bad request"));
         }
     } catch (e) {
@@ -158,43 +161,38 @@ router.post('/', async function (req, res, next) {
 /* POST create new form status or update form status*/
 router.post('/webhookUrl', async function (req, res, next) {
     try {
-        const {resumeUrl, formStatusId, formProcessId} = req.body;
+        const {resumeUrl, formInstanceId, formProcessId} = req.body;
 
-        if(!resumeUrl || !formStatusId || !formProcessId) {
+        if(!resumeUrl || !formInstanceId || !formProcessId) {
             logger.error("Required fields are not present");
             return res.status(400).json(resBuilder.fail("Bad request"));
         }
 
-        if(!formProcessId) {
-            logger.error("Required fields are not present");
+        const formInstance = await postgres.FormsInstances.entity({id: formProcessId, formInstanceId: formInstanceId});
+
+        if(!formInstance) {
+            logger.error("Form instance not found");
             return res.status(400).json(resBuilder.fail("Bad request"));
         }
 
-        const formStatus = await postgres.FormsStatuses.entity({id: formProcessId, formStatusId: formStatusId});
+        formInstance.webhookUrl = resumeUrl;
+        await formInstance.save();
 
-        if(!formStatus) {
-            logger.error("Form status not found");
-            return res.status(400).json(resBuilder.fail("Bad request"));
-        }
-
-        formStatus.webhookUrl = resumeUrl;
-        await formStatus.save();
-
-        return res.status(200).json(resBuilder.success(formStatus));
+        return res.status(200).json(resBuilder.success(formInstance));
     } catch (e) {
         logger.error(e);
         return res.status(500).json(resBuilder.error("Something went wrong, while creating a new form"));
     }
 });
 
-async function createFollowUpFormsStatuses(filledFormId, formStatusId, processStatusId) {
+async function createFollowUpFormsStatuses(filledFormId, formInstanceId, processStatusId) {
     const form = await postgres.Forms.entity({id: filledFormId});
 
     const processId = form.dataValues.processId;
 
     const processForms = await postgres.Forms.entities({processId: processId});
 
-    const nextForms = await postgres.FormsDependencies.entities({prevFormId: formStatusId});
+    const nextForms = await postgres.FormsDependencies.entities({prevFormId: formInstanceId});
 
     const nextFormIds = [];
 
@@ -215,24 +213,24 @@ async function createFollowUpFormsStatuses(filledFormId, formStatusId, processSt
             formStatus = formStatuses.WAITING;
         }
 
-        const newFormStatusData = {
+        const newFormInstanceData = {
             formData: {},
-            formStatusId: processForm.dataValues.formId,
+            formInstanceId: processForm.dataValues.formId,
             status: formStatus,
             formId: processForm.id,
             webhookUrl: webhookUrl,
-            processStatusId: processStatusId
+            processInstanceId: processStatusId
         }
 
-        const newFormStatus = await postgres.FormsStatuses.create(newFormStatusData);
-        if(newFormStatus.dataValues.status === formStatuses.WAITING) {
+        const newFormInstance = await postgres.FormsInstances.create(newFormInstanceData);
+        if(newFormInstance.dataValues.status === formStatuses.WAITING) {
             nextNodesIds.push({
-                "formProcessId": newFormStatus.dataValues.id,
-                "formStatusId": newFormStatus.dataValues.formStatusId
+                "formProcessId": newFormInstance.dataValues.id,
+                "formInstanceId": newFormInstance.dataValues.formInstanceId
             });
         }
     }
-    const n8nWebhookUrl = `${process.env.N8N_BASE_URL}webhook/${formStatusId}`;
+    const n8nWebhookUrl = `${process.env.N8N_BASE_URL}webhook/${formInstanceId}/start`;
     await axios.post(
         n8nWebhookUrl,
         {
@@ -246,6 +244,17 @@ async function createFollowUpFormsStatuses(filledFormId, formStatusId, processSt
             }
         }
     );
+}
+
+async function isProcessFinished(processInstanceId) {
+    const forms = await postgres.FormsInstances.entities({ processInstanceId: processInstanceId });
+    const isAnyFormsNotFilled = forms.filter(formInstance => formInstance.status !== formStatuses.FILLED);
+    console.log(isAnyFormsNotFilled);
+    if(isAnyFormsNotFilled.length === 0) {
+        const processInstance = await postgres.ProcessesInstances.entity({ id: processInstanceId });
+        processInstance.status = processInstances.ENDED;
+        await processInstance.save();
+    }
 }
 
 module.exports = router;

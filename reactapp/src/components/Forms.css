@@ -1,0 +1,113 @@
+.forms-page {
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+.header-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2rem;
+}
+
+.back-button {
+    position: absolute;
+    left: 0;
+    border-radius: 50px !important;
+    padding: 0.4rem 1.2rem !important;
+    font-weight: 500;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.form-header-text {
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+}
+
+.form-title {
+    font-weight: 600;
+    color: #202124;
+    margin: 0;
+}
+
+.form-subtitle {
+    font-weight: 400;
+    color: #5f6368;
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.form-card {
+    border: none !important;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    background-color: #fff;
+    padding: 2rem;
+    margin-bottom: 1rem;
+}
+
+.form-group-title {
+    font-weight: 500;
+    color: #202124;
+    margin-bottom: 1rem;
+    text-align: left;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #111;
+}
+
+.field-label {
+    color: #5f6368;
+    font-size: 0.9rem;
+    margin-bottom: 0.2rem;
+}
+
+.field-input {
+    background-color: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid #dadce0 !important;
+    border-radius: 0 !important;
+    padding-left: 0 !important;
+    font-size: 15px;
+    box-shadow: none !important;
+    transition: border-color 0.2s ease;
+}
+
+.field-input:focus {
+    border-bottom: 2px solid #1a73e8 !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.form-submit-wrapper {
+    text-align: center;
+    margin-top: 2rem;
+}
+
+.form-submit-button {
+    background-color: #1a73e8 !important;
+    border: none !important;
+    border-radius: 50px !important;
+    padding: 0.6rem 1.6rem !important;
+    font-weight: 500;
+    box-shadow: 0 2px 6px rgba(26, 115, 232, 0.3);
+    transition: background-color 0.2s ease;
+}
+
+.form-submit-button:hover {
+    background-color: #155ab6 !important;
+}
+
+.form-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5rem 1rem;
+}
+
+.loading-text {
+    margin-top: 1rem;
+    color: #5f6368;
+}

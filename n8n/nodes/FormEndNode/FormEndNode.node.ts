@@ -1,5 +1,4 @@
 import {
-	NodeConnectionType,
 	INodeType,
 	INodeTypeDescription,
 	IExecuteFunctions,
@@ -13,13 +12,14 @@ export class FormEndNode implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Koncový uzol',
 		name: 'formEndNode',
+		icon: 'file:../shared/assets/tuke.svg',
 		group: ['transform'],
 		version: 1,
 		description: 'Koncový uzol pre formulár.',
 		defaults: {
 			name: 'Koncový uzol',
 		},
-		inputs: [NodeConnectionType.Main],
+		inputs: ['main'],
 		outputs: [],
 		properties: [],
 	};
@@ -44,7 +44,7 @@ export class FormEndNode implements INodeType {
 
 		await this.helpers.request({
 			method: 'POST',
-			url: `https://nodeapp:4000/n8n/${processId}`,
+			url: `${env.NODE_APP_URL}/n8n/${processId}`,
 			json: true,
 			body: {},
 			headers: {

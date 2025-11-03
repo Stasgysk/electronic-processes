@@ -3,8 +3,7 @@
 import {
 	IExecuteFunctions, ILoadOptionsFunctions,
 	INodeExecutionData, INodePropertyOptions, INodeType,
-	INodeTypeDescription,
-	NodeConnectionType, NodeOperationError
+	INodeTypeDescription, NodeOperationError
 } from 'n8n-workflow';
 
 const env = process.env;
@@ -13,14 +12,15 @@ export class DynamicForm implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Formulár',
 		name: 'dynamicForm',
+		icon: 'file:../shared/assets/tuke.svg',
 		group: ['transform'],
 		version: 1,
 		description: 'Vlastný formulár so skupinami a šablónami',
 		defaults: {
 			name: 'Formulár',
 		},
-		inputs: [NodeConnectionType.Main],
-		outputs: [NodeConnectionType.Main],
+		inputs: ['main'],
+		outputs: ['main'],
 		properties: [
 			{
 				displayName: 'Skupina Používateľov',
@@ -124,6 +124,39 @@ export class DynamicForm implements INodeType {
 							},
 							{
 								displayName: 'Názov Poľa',
+								name: 'firstName',
+								type: 'string',
+								default: 'Meno',
+								displayOptions: {
+									show: {
+										groupType: ['personal'],
+									},
+								},
+							},
+							{
+								displayName: 'Názov Poľa',
+								name: 'secondName',
+								type: 'string',
+								default: 'Priezvisko',
+								displayOptions: {
+									show: {
+										groupType: ['personal'],
+									},
+								},
+							},
+							{
+								displayName: 'Názov Poľa',
+								name: 'birthDate',
+								type: 'string',
+								default: 'Dátum narodenia',
+								displayOptions: {
+									show: {
+										groupType: ['personal'],
+									},
+								},
+							},
+							{
+								displayName: 'Názov Poľa',
 								name: 'email',
 								type: 'string',
 								placeholder: 'meno.priezvisko@tuke.sk',
@@ -196,6 +229,20 @@ export class DynamicForm implements INodeType {
 												type: 'string',
 												default: '',
 											},
+											/* eslint-disable n8n-nodes-base/node-param-display-name-miscased */
+											{
+												displayName: 'Typ Poľa',
+												name: 'fieldType',
+												type: 'options',
+												options: [
+													{ name: 'Text', value: 'string' },
+													{ name: 'Číslo', value: 'number' },
+													{ name: 'Dátum', value: 'date' },
+													{ name: 'Boolean', value: 'boolean' },
+												],
+												default: 'string',
+											},
+											/* eslint-enable n8n-nodes-base/node-param-display-name-miscased */
 										],
 									},
 								],
@@ -214,7 +261,7 @@ export class DynamicForm implements INodeType {
 				const env = process.env;
 				const response = await this.helpers.request({
 					method: 'GET',
-					url: 'https://nodeapp:4000/usersGroups',
+					url: `${env.NODE_APP_URL}/usersGroups`,
 					json: true,
 					headers: {
 						'X-Service-Auth': env.INTERNAL_SECRET,
@@ -248,17 +295,20 @@ export class DynamicForm implements INodeType {
 			data.groupName = group.groupName || '';
 			switch (groupType) {
 				case 'personal':
+					data.firstName = {"name": group.firstName, "type": "string"};
+					data.secondName = {"name": group.secondName, "type": "string"};
+					data.birthDate = {"name": group.birthDate, "type": "date"};
 					break;
 
 				case 'contact':
-					data.email = group.email;
-					data.phone = group.phone;
+					data.email = {"name": group.email, "type": "string"};
+					data.phone = {"name": group.phone, "type": "string"};
 					break;
 
 				case 'address':
-					data.city = group.city;
-					data.postal = group.postal;
-					data.street = group.street;
+					data.city = {"name": group.city, "type": "string"};
+					data.postal = {"name": group.postal, "type": "number"};
+					data.street = {"name": group.street, "type": "string"};
 					break;
 
 				case 'custom':
@@ -268,9 +318,11 @@ export class DynamicForm implements INodeType {
 			if (group.customFields && group.customFields.field) {
 				data.customFields = data.customFields || {};
 				for (const field of group.customFields.field) {
-					data[field.fieldName] = field.fieldValue || '';
+					data[field.fieldName] = {"name": field.fieldName, "type": field.fieldType};
 				}
 			}
+
+			delete data.customFields
 
 			output.push({ json: data });
 			form_data.push(data);
@@ -302,7 +354,7 @@ export class DynamicForm implements INodeType {
 
 		const response = await this.helpers.request({
 			method: 'GET',
-			url: `https://nodeapp:4000/n8n/${workflowId}/${nodeName}`,
+			url: `${env.NODE_APP_URL}/n8n/${workflowId}/${nodeName}`,
 			json: true,
 			headers: {
 				'X-Service-Auth': env.INTERNAL_SECRET,
@@ -339,7 +391,7 @@ export class DynamicForm implements INodeType {
 
 		await this.helpers.request({
 			method: 'POST',
-			url: `https://nodeapp:4000/forms`,
+			url: `${env.NODE_APP_URL}/forms`,
 			json: true,
 			body: {
 				"formName": nodeName,

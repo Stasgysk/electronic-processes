@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { login, logout, refresh } from "../api/auth.service";
+import { useNavigate } from "react-router-dom";
 
 const AuthContext = createContext();
 
@@ -7,6 +8,7 @@ export const AuthProvider = ({ children }) => {
     const [accessToken, setAccessToken] = useState(null);
     const [csrfToken, setCsrfToken] = useState(null);
     const [expiresIn, setExpiresIn] = useState(null);
+    const navigate = useNavigate();
 
     const didLoginRef = useRef(false);
     const isRefreshingRef = useRef(false);
@@ -79,7 +81,7 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem("accessToken", data.data.accessToken);
             localStorage.setItem("csrfToken", data.data.csrfToken);
             localStorage.setItem("expiresIn", data.data.expiresIn);
-            window.history.replaceState({}, document.title, "/");
+            navigate("/", { replace: true });
         }
     };
 
@@ -100,9 +102,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider
-            value={{ accessToken, csrfToken, loginWithCode, redirectToSSO, logoutUser }}
-        >
+        <AuthContext.Provider value={{ accessToken, csrfToken, loginWithCode, redirectToSSO, logoutUser }}>
             {children}
         </AuthContext.Provider>
     );

@@ -148,7 +148,7 @@ initDatabase().then(r => {
         if(!processWorkflowTemplate) {
             delete processWorkflowTemplateFile.lastUpdated;
 
-            processWorkflowTemplateFile.name = "TemplateProcessWorkflow";
+            processWorkflowTemplateFile.name = "TemplateProcessWorkflowV2";
             processWorkflowTemplateFile.versionId = uuidv4();
             processWorkflowTemplateFile.id = nanoid(16);
 

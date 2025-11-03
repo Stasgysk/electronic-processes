@@ -12,7 +12,7 @@ let authRouter = require('./routes/auth');
 let usersRouter = require('./routes/users');
 let usersGroupsRouter = require('./routes/usersGroups');
 let formsRouter = require('./routes/forms');
-let formsStatusesRouter = require('./routes/formsStatuses');
+let formsInstancesRouter = require('./routes/formsInstances');
 let processesRouter = require('./routes/processes');
 let n8nRouter = require('./routes/n8n');
 const fs = require("fs");
@@ -76,21 +76,23 @@ app.use(cors(corsOptions));
 
 app.use(logResponse);
 
-app.use(
-    authWrapper({
-        internalSecret: process.env.INTERNAL_SECRET,
-        excludedRoutes: [
-            { path: /^\/auth\/.*/, method: "post" },
-        ]
-    })
-);
+if(process.env.API_AUTH === 'true') {
+    app.use(
+        authWrapper({
+            internalSecret: process.env.INTERNAL_SECRET,
+            excludedRoutes: [
+                { path: /^\/auth\/.*/, method: "post" },
+            ]
+        })
+    );
+}
 
 app.use('/', indexRouter);
 app.use('/auth', authRouter);
 app.use('/users', usersRouter);
 app.use('/usersGroups', usersGroupsRouter);
 app.use('/forms', formsRouter);
-app.use('/formsStatuses', formsStatusesRouter);
+app.use('/formsInstances', formsInstancesRouter);
 app.use('/processes', processesRouter);
 app.use('/n8n', n8nRouter);
 

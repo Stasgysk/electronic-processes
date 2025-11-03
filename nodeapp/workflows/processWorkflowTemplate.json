@@ -1,376 +1,58 @@
 {
-  "name": "TemplateProcessWorkflow",
+  "name": "TemplateProcessWorkflowV2",
   "active": false,
   "nodes": [
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "8726e67e-035b-4ced-be1a-328e5a174857",
-        "authentication": "basicAuth",
-        "responseMode": "responseNode",
-        "options": {}
+    [
+      {
+        "parameters": {
+          "authentication": "basicAuth"
+        },
+        "type": "CUSTOM.formInstanceStartNode",
+        "typeVersion": 1,
+        "position": [
+          0,
+          0
+        ],
+        "id": "c86cbcfc-dfec-48c5-ba3d-7f30da8f3216",
+        "name": "Form Start Trigger",
+        "webhookId": "059652a8-50a9-4571-a311-9aa51ed321bb",
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "psgf0RRixXJNYGmq",
+            "name": "FormsCreds"
+          }
+        }
       },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [
-        0,
-        0
-      ],
-      "id": "85f2b26c-cb3a-46b9-b79f-908f4fda8437",
-      "name": "Webhook",
-      "webhookId": "8726e67e-035b-4ced-be1a-328e5a174857",
-      "credentials": {
-        "httpBasicAuth": {
-          "id": "psgf0RRixXJNYGmq",
-          "name": "FormsCreds"
+      {
+        "parameters": {
+          "authentication": "basicAuth"
+        },
+        "type": "CUSTOM.formInstanceResumeNode",
+        "typeVersion": 1,
+        "position": [
+          208,
+          0
+        ],
+        "id": "68d8310d-2449-4d03-87c8-a5ea6d20f17d",
+        "name": "Form Instance Resume",
+        "webhookId": "498baddb-0ad3-4bbc-b1de-c46829604f33",
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "psgf0RRixXJNYGmq",
+            "name": "FormsCreds"
+          }
         }
       }
-    },
-    {
-      "parameters": {
-        "resume": "webhook",
-        "incomingAuthentication": "basicAuth",
-        "httpMethod": "POST",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        656,
-        112
-      ],
-      "id": "3f3fb0f3-ebe5-43dc-9e6b-8812356bb2d2",
-      "name": "Wait",
-      "webhookId": "6e493d2b-ec83-41a7-a9a8-048b7be1d6dc",
-      "credentials": {
-        "httpBasicAuth": {
-          "id": "psgf0RRixXJNYGmq",
-          "name": "FormsCreds"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "716f3e7c-7277-47f7-b6df-c4a192a9e262",
-              "leftValue": "={{ $json.body.isFirstNode }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        432,
-        0
-      ],
-      "id": "bab28365-a0be-4fed-a83d-ce536e063481",
-      "name": "If"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={\n  \"resumeUrl\": \"{{$execution.resumeUrl}}\",\n  \"webhookUrl\": \"{{$json.webhookUrl}}\",\n  \"nextNodesIds\": [\n    {\n      \"formProcessId\": {{ $json.body.nextNodesIds?.[0]?.formProcessId ?? \"null\" }},\n      \"formStatusId\": \"{{$json.body.nextNodesIds?.[0]?.formStatusId ?? ''}}\"\n    }\n  ]\n}\n",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
-      "position": [
-        208,
-        0
-      ],
-      "id": "ed121d31-459a-4b59-a697-f25697068fb9",
-      "name": "Respond to Webhook"
-    },
-    {
-      "parameters": {
-        "options": {}
-      },
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [
-        1840,
-        0
-      ],
-      "id": "b2554fcd-afcb-4d6e-a15c-3c955a123190",
-      "name": "Loop Over Items"
-    },
-    {
-      "parameters": {
-        "jsCode": "const item = $input.first();\nconst nextNodesIds = item.json.body?.nextNodesIds || [];\n\nreturn nextNodesIds.map(node => ({\n  json: {\n    formProcessId: node.formProcessId,\n    formStatusId: node.formStatusId\n  }\n}));"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1312,
-        0
-      ],
-      "id": "ea62e0d2-f72b-40e8-bd2a-4edabf3b99f9",
-      "name": "Code"
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        1088,
-        0
-      ],
-      "id": "8fe3603a-8957-40dd-a3c6-8911a5e5b03f",
-      "name": "Merge"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=http://localhost:5678/webhook/{{ $json.formStatusId }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpBasicAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Service-Auth",
-              "value": "c6638a9e5c4074ab4199907ad1768252"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n    \"isFirstNode\": false,\n    \"nextNodesIds\": [\n        {\n            \"formProcessId\": {{ $json.formProcessId }},\n            \"formStatusId\": \"{{ $json.formStatusId }}\"\n        }\n    ]\n}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2080,
-        128
-      ],
-      "id": "b363e0dd-c3fb-42d3-a52f-a70d69147ed8",
-      "name": "HTTP Request",
-      "credentials": {
-        "httpBasicAuth": {
-          "id": "psgf0RRixXJNYGmq",
-          "name": "FormsCreds"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://nodeapp:4000/formsStatuses/webhookUrl",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Service-Auth",
-              "value": "c6638a9e5c4074ab4199907ad1768252"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"resumeUrl\": \"{{ $json.resumeUrl }}\",\n  \"formStatusId\": \"{{ $json.nextNodesIds[0].formStatusId }}\",\n  \"formProcessId\": {{ $json.nextNodesIds[0].formProcessId }}\n}",
-        "options": {
-          "allowUnauthorizedCerts": true
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2256,
-        -16
-      ],
-      "id": "154682b8-1d3e-4807-9274-e3129793d101",
-      "name": "HTTP Request1"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "172a18dc-0bfa-4e9e-8d0b-51a93709c426",
-              "leftValue": "={{ $json }}",
-              "rightValue": 0,
-              "operator": {
-                "type": "object",
-                "operation": "notEmpty",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1536,
-        0
-      ],
-      "id": "ae551ee5-a03a-4820-a6ea-4af56a7f50ac",
-      "name": "If1"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={\n  \"webhookUrl\": \"{{ $json.webhookUrl }}\",\n  \"inputBody\": {\n    \"nextNodesIds\": {{ JSON.stringify(\n      typeof $json.body === 'string'\n        ? JSON.parse($json.body).nextNodesIds\n        : $json.body?.nextNodesIds\n    ) }}\n  }\n}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
-      "position": [
-        864,
-        112
-      ],
-      "id": "31a188a2-5faa-4fb2-84b1-98a50e920292",
-      "name": "Respond to Webhook1"
-    }
+    ]
   ],
   "connections": {
-    "Webhook": {
+    "Form Start Trigger": {
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Form Instance Resume",
             "type": "main",
             "index": 0
-          }
-        ]
-      ]
-    },
-    "If": {
-      "main": [
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Respond to Webhook": {
-      "main": [
-        [
-          {
-            "node": "If",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Loop Over Items": {
-      "main": [
-        [
-          {
-            "node": "HTTP Request1",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "HTTP Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Code": {
-      "main": [
-        [
-          {
-            "node": "If1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge": {
-      "main": [
-        [
-          {
-            "node": "Code",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "HTTP Request": {
-      "main": [
-        [
-          {
-            "node": "Loop Over Items",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If1": {
-      "main": [
-        [
-          {
-            "node": "Loop Over Items",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Respond to Webhook1": {
-      "main": [
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 1
           }
         ]
       ]
@@ -381,9 +63,9 @@
   },
   "staticData": null,
   "pinData": {},
-  "versionId": "ae6d5e88-324c-4d57-a126-065b1de08998",
+  "versionId": "1af20996-3763-4c03-b70d-4b08beed74e7",
   "triggerCount": 1,
-  "id": "iZsPXFtlv9LCkq7M",
+  "id": "wcpAwNjaQsM3ig8F",
   "meta": {
     "templateCredsSetupCompleted": true
   },

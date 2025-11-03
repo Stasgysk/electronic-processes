@@ -1,16 +1,18 @@
 import React from "react";
-import './LoginButton.css'
 import { useAuth } from "../contexts/AuthContext";
+import {Button} from "react-bootstrap";
+import {useTranslation} from "react-i18next";
 
 export default function LoginButton() {
     const { accessToken, redirectToSSO, logoutUser } = useAuth();
+    const { t } = useTranslation();
 
     return (
         <div>
             {!accessToken ? (
-                <button onClick={redirectToSSO} className="login-button">Login</button>
+                <Button variant="light" type="submit" onClick={redirectToSSO} >{t('login')}</Button>
             ) : (
-                <button onClick={logoutUser} className="login-button">Logout</button>
+                <Button variant="light" type="submit" onClick={logoutUser} >{t('logout')}</Button>
             )}
         </div>
     );

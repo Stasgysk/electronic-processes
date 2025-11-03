@@ -17,6 +17,7 @@ export const UserProvider = ({ children }) => {
             setUser(null);
             setError(null);
             setLoading(false);
+            didFetchUserRef.current = false;
             return;
         }
 

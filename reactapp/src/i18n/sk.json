@@ -1,0 +1,15 @@
+{
+  "login": "Prihlásiť sa",
+  "logout": "Odhlásiť sa",
+  "formName": "Názov formulára",
+  "createdAt": "Vytvorené o",
+  "loginForForms": "Prihláste sa, aby ste videli dostupné formuláre",
+  "loadingForms": "Načítavanie dostupných formulárov...",
+  "formsLoadingError": "Nepodarilo sa načítať dostupné formuláre",
+  "availableForms": "Dostupné formy",
+  "noAvailableForms": "Nenašli sa žiadne dostupné formuláre",
+  "formNotFound": "Formulár nebol nájdený",
+  "back": "Späť",
+  "submit": "Odoslať",
+  "formsAwaitingActions": "Formuláre čakajúce na spracovanie"
+}

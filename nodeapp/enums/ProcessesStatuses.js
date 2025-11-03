@@ -1,4 +1,4 @@
-// ProcessesStatuses.js
+// ProcessesInstances.js
 
 const ProcessesStatusesEnum = Object.freeze({
     DRAFT: 'draft',

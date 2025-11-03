@@ -48,6 +48,10 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
+      N8N_PROTOCOL: https
+      N8N_SSL_CERT: /files/fullchain.pem
+      N8N_SSL_KEY: /files/privkey.pem
+      NODE_TLS_REJECT_UNAUTHORIZED: 0
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,7 +60,8 @@ services:
       - ./n8n-init.js:/home/node/n8n-init.js
       - ./workflows:/home/node/workflows
       - ./credentials:/home/node/credentials
-      - ./custom:/home/node/.n8n/custom
+      - ./dist:/home/node/.n8n/custom
+      - ./certs:/files
     networks:
       - n8n-postgres-node-network
 

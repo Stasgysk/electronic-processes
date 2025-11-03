@@ -22,7 +22,7 @@ module.exports = (sequelize, DataTypes, name) => {
             allowNull: false,
         },
     }, {
-        tableName: "processes_statuses",
+        tableName: "processes_instances",
         underscored: true,
         timestamps: true,
         paranoid: true,

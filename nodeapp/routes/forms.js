@@ -168,7 +168,7 @@ async function createUsersDependencies(userGroupId, userEmails, formId) {
     }
 }
 
-/* Put update form */
+/* PUT update form */
 router.put('/:id', async function (req, res, next) {
     try {
         const formId = req.params.id;
@@ -195,6 +195,21 @@ router.put('/:id', async function (req, res, next) {
     } catch (e) {
         logger.error(e);
         return res.status(500).json(resBuilder.error("Something went wrong, while updating form"));
+    }
+});
+
+/* GET all available forms */
+router.get('/available/:userGroupId', async function (req, res, next) {
+    try {
+        const {eager, length, offset} = routesUtils.getDefaultRequestParams(req);
+
+        const { userGroupId } = req.params;
+
+        const forms = await postgres.Forms.entities({isStartingNode: true, userGroupId}, eager, null, length, offset);
+        return res.status(200).json(resBuilder.success(forms));
+    } catch (e) {
+        logger.error(e);
+        return res.status(500).json(resBuilder.error("Something went wrong, while getting all available forms"));
     }
 });
 

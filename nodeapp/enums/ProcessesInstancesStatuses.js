@@ -1,4 +1,4 @@
-// ProcessesStatusesStatuses.js
+// ProcessesInstancesStatuses.js
 
 const ProcessesStatusesStatusesEnum = Object.freeze({
     PROCESSING: 'processing',

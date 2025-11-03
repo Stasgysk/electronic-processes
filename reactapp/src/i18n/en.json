@@ -1,0 +1,15 @@
+{
+  "login": "Login",
+  "logout": "Logout",
+  "formName": "Form Name",
+  "createdAt": "Created at",
+  "loginForForms": "Please log in to see available forms",
+  "loadingForms": "Loading available forms...",
+  "formsLoadingError": "Failed to load available forms",
+  "availableForms": "Available Forms",
+  "noAvailableForms": "No available forms found",
+  "formNotFound": "Form not found",
+  "back": "Back",
+  "submit": "Submit",
+  "formsAwaitingActions": "Forms awaiting actions"
+}

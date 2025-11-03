@@ -109,11 +109,12 @@ router.post('/:id', async function (req, res, next) {
         const templateWorkflow = await postgres.WorkflowEntities.entity({name: processWorkflowTemplateFile.name});
         const templateSharedWorkflow = await postgres.SharedWorkflow.entity({workflowId: templateWorkflow.id});
 
+        const folderId = nanoid(16);
         for(let form of forms) {
             const versionId = form.formId;
             const isProcessWorkflowExists = await postgres.WorkflowEntities.entity({versionId: versionId});
 
-            await updateOrCreateProcessWorkflowEntity(isProcessWorkflowExists, processWorkflowTemplateFile, versionId, foundProcess.name, form.formName, templateSharedWorkflow)
+            await updateOrCreateProcessWorkflowEntity(isProcessWorkflowExists, processWorkflowTemplateFile, versionId, foundProcess.name, form.formName, templateSharedWorkflow, folderId);
         }
 
         return res.status(200).json(resBuilder.success("Process workflows created"));
@@ -142,7 +143,7 @@ async function removeTempForms(areTempForms){
     }
 }
 
-async function updateOrCreateProcessWorkflowEntity(processWorkflow, newData, versionId, processName, formName, sharedWorkflowDataTemplate) {
+async function updateOrCreateProcessWorkflowEntity(processWorkflow, newData, versionId, processName, formName, sharedWorkflowDataTemplate, folderId) {
     let isExist = false;
     if(processWorkflow) {
         isExist = true;
@@ -169,6 +170,9 @@ async function updateOrCreateProcessWorkflowEntity(processWorkflow, newData, ver
                 node.webhookId = versionId;
                 break;
             default:
+                if(node.webhookId) {
+                    node.webhookId = versionId;
+                }
                 break;
         }
     }
@@ -184,28 +188,46 @@ async function updateOrCreateProcessWorkflowEntity(processWorkflow, newData, ver
         processWorkflow.parentFolder = processWorkflowTemplateCopy.staticData;
 
         await processWorkflow.save();
+        await patchWorkflow(processWorkflow.id);
         logger.info(`Process Workflow updated: ${processWorkflowTemplateCopy.name}`);
     } else {
+        processWorkflowTemplateCopy.parentFolderId = folderId;
+
         const sharedWorkflowData = {
             workflowId: workflowId,
             projectId: sharedWorkflowDataTemplate.projectId,
             role: sharedWorkflowDataTemplate.role,
         }
 
+        const folder = await postgres.Folder.entity({id: folderId});
+        if(!folder) {
+            const folderData = {
+                id: folderId,
+                name: processName,
+                projectId: sharedWorkflowDataTemplate.projectId,
+            }
+
+            await postgres.Folder.create(folderData);
+        }
+
         await postgres.WorkflowEntities.create(processWorkflowTemplateCopy);
         await postgres.SharedWorkflow.create(sharedWorkflowData);
 
-        await axios.patch(
-            `${process.env.N8N_BASE_URL}rest/workflows/${workflowId}`,
-            { active: true },
-            {
-                headers: {
-                    Cookie: await getAuthCookie()
-                }
-            }
-        );
+        await patchWorkflow(workflowId);
         logger.info(`Process Workflow created: ${processWorkflowTemplateCopy.name}`);
     }
+}
+
+async function patchWorkflow(workflowId) {
+    await axios.patch(
+        `${process.env.N8N_BASE_URL}rest/workflows/${workflowId}`,
+        { active: true },
+        {
+            headers: {
+                Cookie: await getAuthCookie()
+            }
+        }
+    );
 }
 
 module.exports = router;

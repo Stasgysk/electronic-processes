@@ -11,8 +11,10 @@ axios.interceptors.request.use((config) => {
 });
 
 axios.interceptors.response.use((response) => {
-    const msg = `RESPONSE: ${response.status} ${response.config.url} DATA: ${JSON.stringify(response.data)}`;
+    const msg = `RESPONSE: ${response.status} ${response.config.url}`;
     logger.info(msg)
+    const debugMsg = `DATA: ${JSON.stringify(response.data)}`;
+    logger.debug(debugMsg);
     return response;
 }, (error) => {
     const msg = error.response

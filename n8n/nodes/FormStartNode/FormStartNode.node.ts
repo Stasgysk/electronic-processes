@@ -1,7 +1,6 @@
 import {
 	ITriggerFunctions,
 	ITriggerResponse,
-	NodeConnectionType,
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
@@ -12,6 +11,7 @@ export class FormStartNode implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Počiatočný uzol',
 		name: 'formStartNode',
+		icon: 'file:../shared/assets/tuke.svg',
 		group: ['trigger'],
 		version: 1,
 		description: 'Počiatočný uzol pre formulár.',
@@ -19,7 +19,7 @@ export class FormStartNode implements INodeType {
 			name: 'Počiatočný uzol',
 		},
 		inputs: [],
-		outputs: [NodeConnectionType.Main],
+		outputs: ['main'],
 		properties: [
 			{
 				displayName: 'Názov Formulára',
@@ -121,7 +121,7 @@ export class FormStartNode implements INodeType {
 
 		const response = await this.helpers.request({
 			method: 'POST',
-			url: `https://nodeapp:4000/processes`,
+			url: `${env.NODE_APP_URL}/processes`,
 			json: true,
 			body: {
 				"name": name,
