@@ -178,24 +178,37 @@ export class FormInstanceResumeNode extends Webhook {
 
 		const authHeader = 'Basic ' + Buffer.from(`${creds.user}:${creds.password}`).toString('base64');
 
-		for (const formData of inputBody.nextNodesIds) {
-			const url = `${env.N8N_EDITOR_BASE_URL}/webhook/${formData.formInstanceId}/start`;
-			const body = {
-				isFirstNode: false,
-				nextNodesIds: [
-					{
-						formProcessId: formData.formProcessId,
-						formInstanceId: formData.formInstanceId,
+		try {
+			for (const formData of inputBody.nextNodesIds) {
+				const response = await ctx.helpers.request({
+					method: 'GET',
+					url: `${env.NODE_APP_URL}/formsInstances/users/${formData.formInstanceId}`,
+					headers: {
+						'X-Service-Auth': env.INTERNAL_SECRET,
 					},
-				],
-				formData: inputBody.formData,
-				formSubmittedByUser: inputBody.formSubmittedByUser,
-				formName: inputBody.formName,
-			};
+					json: true,
+					rejectUnauthorized: env.IS_PROD === 'true',
+				});
 
-			console.log(url);
+				let emails = response.data.emails;
 
-			try {
+				const url = `${env.N8N_EDITOR_BASE_URL}/webhook/${formData.formInstanceId}/start`;
+				const body = {
+					isFirstNode: false,
+					nextNodesIds: [
+						{
+							formProcessId: formData.formProcessId,
+							formInstanceId: formData.formInstanceId,
+						},
+					],
+					formData: inputBody.formData,
+					formSubmittedByUser: inputBody.formSubmittedByUser,
+					formName: inputBody.formName,
+					nextFormData: inputBody.nextFormData,
+					nextFormName: inputBody.nextFormName,
+					assigneeEmails: emails,
+				};
+
 				await ctx.helpers.request({
 					method: 'POST',
 					url,
@@ -207,9 +220,9 @@ export class FormInstanceResumeNode extends Webhook {
 					json: true,
 					rejectUnauthorized: env.IS_PROD === 'true',
 				});
-			} catch (error) {
-				throw new Error(`continueWithNextForms failed: ${(error as Error).message}`);
 			}
+		} catch (error) {
+			throw new Error(`continueWithNextForms failed: ${(error as Error).message}`);
 		}
 
 		return resultData;

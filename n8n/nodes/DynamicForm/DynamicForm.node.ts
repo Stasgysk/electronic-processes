@@ -373,6 +373,8 @@ export class DynamicForm implements INodeType {
 		};
 
 		const output: any[] = [];
+		const beforeOutput: any[] = [];
+		const afterOutput: any[] = [];
 
 		let form_data = [];
 		for (const group of formGroups.group) {
@@ -412,14 +414,16 @@ export class DynamicForm implements INodeType {
 
 			delete data.customFields;
 
-			output.push({ json: data });
 			form_data.push(data);
 		}
+		output.push({ json: { type: 'formData', formData: form_data } });
 
 		let dataToAdd: any = { type: 'input' };
 		let isInputDataFound = null;
 
+		let prevFormData;
 		let isNodeConnected = false;
+		console.log(inputData);
 		for (const inputField of inputData) {
 			if (inputField?.json?.type === 'input') {
 				isInputDataFound = inputField.json.data;
@@ -427,6 +431,10 @@ export class DynamicForm implements INodeType {
 
 			if (inputField?.json.type === 'prevNode') {
 				isNodeConnected = true;
+			}
+
+			if (inputField?.json.type === 'formData') {
+				prevFormData = inputField.json.formData;
 			}
 		}
 
@@ -558,6 +566,37 @@ export class DynamicForm implements INodeType {
 			rejectUnauthorized: env.IS_PROD === 'true',
 		});
 
-		return [output, output, output];
+		beforeOutput.push({
+			json: {
+				input: {
+					formData: prevFormData,
+					formName: '',
+					formSubmittedByUser: {
+						id: '',
+						name: '',
+						userGroupId: '',
+						email: '',
+					},
+					nextFormData: form_data,
+					nextFormName: '',
+					assigneeEmails: '',
+				},
+			},
+		});
+
+		afterOutput.push({
+			json: {
+				formData: form_data,
+				formName: '',
+				formSubmittedByUser: {
+					id: '',
+					name: '',
+					userGroupId: '',
+					email: '',
+				},
+			},
+		});
+
+		return [output, beforeOutput, afterOutput];
 	}
 }

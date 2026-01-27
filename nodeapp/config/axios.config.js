@@ -29,7 +29,7 @@ axios.interceptors.response.use((response) => {
     const msg = `RESPONSE: ${response.status} ${response.config.url}`;
     logger.info(msg)
     const debugMsg = `DATA: ${JSON.stringify(response.data)}`;
-    logger.debug(debugMsg);
+    process.env.LOG_LEVEL === 'true' ? logger.debug(debugMsg) : null;
     return response;
 }, (error) => {
     const msg = error.response

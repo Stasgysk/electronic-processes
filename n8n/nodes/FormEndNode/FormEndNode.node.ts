@@ -42,11 +42,15 @@ export class FormEndNode implements INodeType {
 			throw new NodeOperationError(this.getNode(), `Koncový uzol nie je správne pripojený`);
 		}
 
+		const workflowId = this.getWorkflow().id;
+
 		await this.helpers.request({
 			method: 'POST',
 			url: `${env.NODE_APP_URL}/n8n/${processId}`,
 			json: true,
-			body: {},
+			body: {
+				workflowId
+			},
 			headers: {
 				'X-Service-Auth': env.INTERNAL_SECRET,
 			},

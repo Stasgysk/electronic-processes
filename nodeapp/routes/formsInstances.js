@@ -7,7 +7,6 @@ const routesUtils = require("../utils/RoutesUtils");
 let router = express.Router();
 const formStatuses = require('../enums/FormStatuses');
 const processInstances = require('../enums/ProcessesInstancesStatuses');
-const processesStatuses = require("../enums/FormStatuses");
 const {Op} = require("sequelize");
 
 /* GET all forms statuses */
@@ -173,6 +172,35 @@ router.get('/:id', async function (req, res, next) {
         }
 
         return res.status(200).json(resBuilder.success(form));
+    } catch (e) {
+        logger.error(e);
+        return res.status(500).json(resBuilder.error("Something went wrong, while getting form status by id"));
+    }
+});
+
+/* GET users emails by form instance id */
+router.get('/users/:id', async function (req, res, next) {
+    try {
+        const formInstanceId = req.params.id;
+
+        const formInstance = await postgres.FormsInstances.entity({formInstanceId: formInstanceId});
+
+        if (!formInstance) {
+            logger.error("Form instance not found");
+            return res.status(400).json(resBuilder.fail("Bad request."));
+        }
+
+        const userIds = formInstance.dataValues.assigneeId;
+
+        const usersEmails = [];
+        for(let userId of userIds) {
+            const user = await postgres.Users.entity({id: userId});
+            if (user) {
+                usersEmails.push(user.dataValues.email);
+            }
+        }
+
+        return res.status(200).json(resBuilder.success({ emails: usersEmails.join(',') }));
     } catch (e) {
         logger.error(e);
         return res.status(500).json(resBuilder.error("Something went wrong, while getting form status by id"));
@@ -439,7 +467,7 @@ async function createFollowUpFormsInstances(form, formInstanceId, processStatusI
             }
         }
     }
-
+    const formToStart = await postgres.Forms.entity({formId: formInstanceId});
     const n8nWebhookUrl = `${process.env.N8N_BASE_URL}webhook/${formInstanceId}/start`;
     await axios.post(
         n8nWebhookUrl,
@@ -448,6 +476,8 @@ async function createFollowUpFormsInstances(form, formInstanceId, processStatusI
             "nextNodesIds": nextNodesIds,
             "formData": formData,
             "formName": form.dataValues.formName,
+            "nextFormData": formToStart.dataValues.formData,
+            "nextFormName": formToStart.dataValues.formName,
             "formSubmittedByUser": user
         },
         {
