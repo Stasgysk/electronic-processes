@@ -1,3 +1,4 @@
+/* eslint-disable n8n-nodes-base/node-execute-block-wrong-error-thrown */
 import {
 	IWebhookFunctions,
 	IWebhookResponseData,
@@ -5,23 +6,24 @@ import {
 	INodeTypeDescription,
 	ICredentialDataDecryptedObject,
 } from 'n8n-workflow';
-import { credentialsProperty } from './description';
-import { WebhookAuthorizationError } from '../FormInstanceNode/error';
+import { credentialsProperty } from '../shared/functions/description';
+import { WebhookAuthorizationError } from '../shared/functions/error';
 import basicAuth from 'basic-auth';
 
 export class FormInstanceStartNode implements INodeType {
 	authPropertyName = 'authentication';
 
 	description: INodeTypeDescription = {
-		displayName: 'Form Instance Start Trigger',
+		displayName: 'Spúšťač inštancie formulára',
 		name: 'formInstanceStartNode',
 		group: ['trigger'],
 		icon: 'file:../shared/assets/tuke.svg',
 		version: 1,
-		description: 'Starts the workflow when a POST request is received',
-		defaults: { name: 'Form Start Trigger' },
+		description: 'Spustí proces po prijatí požiadavky POST.',
+		defaults: { name: 'Spúšťač inštancie formulára' },
 		inputs: [],
-		outputs: ['main'],
+		outputs: ['main', 'main'],
+		outputNames: ['', ''],
 		webhooks: [
 			{
 				name: 'default',
@@ -60,18 +62,30 @@ export class FormInstanceStartNode implements INodeType {
 			throw error;
 		}
 
+		const firstOutput = [
+			{
+				json: {
+					step: 'first',
+					message: 'Logika pred priradením formy',
+					input: body,
+				},
+			},
+		];
+
+		const secondOutput = [
+			{
+				json: {
+					step: 'second',
+					message: '',
+					dependsOn: 'first branch completed',
+					input: body,
+				},
+			},
+		];
+
 		return {
 			webhookResponse: { ok: true },
-			workflowData: [
-				[
-					{
-						json: {
-							message: 'Workflow started',
-							input: body,
-						},
-					},
-				],
-			],
+			workflowData: [firstOutput, secondOutput],
 		};
 	}
 

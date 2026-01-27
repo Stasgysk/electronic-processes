@@ -25,14 +25,9 @@ module.exports = (sequelize, DataTypes, name) => {
             type: DataTypes.INTEGER,
             allowNull: false,
         },
-        userGroupId: {
-            type: DataTypes.INTEGER,
+        formAssigneeType: {
+            type: DataTypes.ENUM('group', 'shared_emails', 'individual_emails'),
             allowNull: false,
-        },
-        usersEmails: {
-            type: DataTypes.TEXT,
-            allowNull: true,
-            default: "",
         },
         isStartingNode: {
             type: DataTypes.BOOLEAN,
@@ -47,9 +42,7 @@ module.exports = (sequelize, DataTypes, name) => {
         indexes: [
             { fields: ['form_id'] },
             { fields: ['process_id'] },
-            { fields: ['user_group_id'] },
             { fields: ['is_starting_node'] },
-            { fields: ['process_id', 'user_group_id'] },
         ],
     });
 
@@ -57,10 +50,6 @@ module.exports = (sequelize, DataTypes, name) => {
         entity.belongsTo(models.Processes, {
             foreignKey: 'processId',
             as: 'Processes'
-        });
-        entity.belongsTo(models.UsersGroups, {
-            foreignKey: 'userGroupId',
-            as: 'UserGroup'
         });
         entity.belongsToMany(entity, {
             through: models.FormsDependencies,
@@ -79,50 +68,41 @@ module.exports = (sequelize, DataTypes, name) => {
             sourceKey: 'formId',
             targetKey: 'formId'
         });
+
+        entity.hasMany(models.FormsAssignees, {
+            foreignKey: 'formId',
+            as: 'FormsAssignees',
+            onDelete: 'CASCADE',
+            onUpdate: 'CASCADE',
+        });
     };
 
 
     entity.entity = async (where = null, eager = false) => {
-        let include = [];
-
-        // if(eager) {
-        //     include = [
-        //         {
-        //             model: entity.associations.Forms.target,
-        //             as: 'Forms',
-        //         }
-        //     ];
-        // }
-
+        const { FormsAssignees, Processes } = sequelize.models;
         return entity.findOne({
-            include: (eager ? include : null),
-            where: where,
+            where,
+            include: eager ? [
+                { model: FormsAssignees, as: 'FormsAssignees' },
+                { model: Processes, as: 'Processes' },
+            ] : undefined,
         });
     };
 
     entity.entities = async (where = null, eager = false, order = [], length = 50, start = 0) => {
-        let include = [];
-        let attributes = null;
-
-        // if(eager) {
-        //     include = [
-        //         {
-        //             model: entity.associations.Organization.target, // Access the target model via associations
-        //             as: 'Organization',
-        //         }
-        //     ];
-        // }
-
+        const { FormsAssignees, Processes } = sequelize.models;
         return entity.findAll({
-            where: where,
-            limit: (!length?null:parseInt(length)),
+            where,
+            include: eager ? [
+                { model: FormsAssignees, as: 'FormsAssignees' },
+                { model: Processes, as: 'Processes' },
+            ] : undefined,
+            limit: length ? parseInt(length) : undefined,
             offset: parseInt(start),
-            include: (eager ? include : null),
-            order: [
-                ['updatedAt', 'DESC'],
-            ],
+            order: [['updatedAt', 'DESC']],
         });
     };
+
 
     return entity;
 };

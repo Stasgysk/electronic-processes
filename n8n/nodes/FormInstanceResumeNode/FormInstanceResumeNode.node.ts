@@ -7,9 +7,9 @@ import {
 	IWebhookFunctions,
 	WAIT_INDEFINITELY,
 } from 'n8n-workflow';
-import { Webhook } from './Webhook/Webhook.node';
-import { credentialsProperty } from './description';
-import { WebhookAuthorizationError } from '../FormInstanceNode/error';
+import { Webhook } from '../shared/functions/Webhook/Webhook.node';
+import { credentialsProperty } from '../shared/functions/description';
+import { WebhookAuthorizationError } from '../shared/functions/error';
 import basicAuth from 'basic-auth';
 
 const env = process.env;
@@ -18,14 +18,14 @@ export class FormInstanceResumeNode extends Webhook {
 	authPropertyName = 'authentication';
 
 	description: INodeTypeDescription = {
-		displayName: 'Form Instance Resume',
+		displayName: 'Čakanie na odoslanie formulára',
 		name: 'formInstanceResumeNode',
 		group: ['organization'],
 		icon: 'file:../shared/assets/tuke.svg',
 		version: 1,
-		description: 'Waits for a webhook call before continuing execution',
+		description: 'Čaká na odoslanie formulára pred pokračovaním v vykonávaní.',
 		defaults: {
-			name: 'Form Instance Resume',
+			name: 'Čakanie na odoslanie formulára',
 		},
 		inputs: ['main'],
 		outputs: ['main'],
@@ -72,7 +72,7 @@ export class FormInstanceResumeNode extends Webhook {
 
 		console.log(body);
 		// @ts-ignore
-		await FormInstanceResumeNode.continueWithNextForms(context, body.nextNodesIds);
+		await FormInstanceResumeNode.continueWithNextForms(context, body);
 
 		return {
 			workflowData: [[{ json: body }]],
@@ -87,13 +87,13 @@ export class FormInstanceResumeNode extends Webhook {
 
 		if(isFirstNode) {
 			// @ts-ignore
-			await FormInstanceResumeNode.continueWithNextForms(context, inputData[0].json.input.nextNodesIds);
+			await FormInstanceResumeNode.continueWithNextForms(context, inputData[0].json.input);
 
 			return [
 				[
 					{
 						json: {
-							message: 'Executing without waiting'
+							message: 'Vykonávanie bez čakania'
 						},
 					},
 				],
@@ -101,8 +101,11 @@ export class FormInstanceResumeNode extends Webhook {
 		}
 		await context.putExecutionToWait(WAIT_INDEFINITELY);
 
-		const resumeUrl = (context.evaluateExpression('{{$execution.resumeUrl}}', 0) + "/form-instance-resume")
-			.replace("http", "https");
+		let resumeUrl = (context.evaluateExpression('{{$execution.resumeUrl}}', 0) + "/form-instance-resume");
+
+		if(env.N8N_EDITOR_BASE_URL && env.N8N_EDITOR_BASE_URL.includes("https")) {
+			resumeUrl = resumeUrl.replace("http", "https")
+		}
 
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
@@ -120,12 +123,13 @@ export class FormInstanceResumeNode extends Webhook {
 				const body = { resumeUrl, formInstanceId, formProcessId };
 
 				try {
-					await context.helpers.httpRequest({
+					await context.helpers.request({
 						method: 'POST',
 						url: `${env.NODE_APP_URL}/formsInstances/webhookUrl`,
 						headers,
 						body,
 						json: true,
+						rejectUnauthorized: env.IS_PROD === "true",
 					});
 				} catch (error) {
 					throw new Error(`Sending resumeUrl failed: ${(error as Error).message}`);
@@ -137,7 +141,7 @@ export class FormInstanceResumeNode extends Webhook {
 			[
 				{
 					json: {
-						message: 'Waiting for webhook...',
+						message: 'Čakanie na webhook...',
 						resumeUrl,
 					},
 				},
@@ -164,18 +168,17 @@ export class FormInstanceResumeNode extends Webhook {
 		}
 	}
 
-	static async continueWithNextForms(ctx: IExecuteFunctions | IWebhookFunctions, nextForms: any) {
+	static async continueWithNextForms(ctx: IExecuteFunctions | IWebhookFunctions, inputBody: any) {
 		const resultData: any[] = [];
 		const creds = await ctx.getCredentials<ICredentialDataDecryptedObject>('httpBasicAuth')
 
-		console.log(creds);
 		if (!creds || !creds.user || !creds.password) {
 			throw new Error('Missing credentials');
 		}
 
 		const authHeader = 'Basic ' + Buffer.from(`${creds.user}:${creds.password}`).toString('base64');
 
-		for (const formData of nextForms) {
+		for (const formData of inputBody.nextNodesIds) {
 			const url = `${env.N8N_EDITOR_BASE_URL}/webhook/${formData.formInstanceId}/start`;
 			const body = {
 				isFirstNode: false,
@@ -185,12 +188,15 @@ export class FormInstanceResumeNode extends Webhook {
 						formInstanceId: formData.formInstanceId,
 					},
 				],
+				formData: inputBody.formData,
+				formSubmittedByUser: inputBody.formSubmittedByUser,
+				formName: inputBody.formName,
 			};
 
 			console.log(url);
 
 			try {
-				await ctx.helpers.httpRequest({
+				await ctx.helpers.request({
 					method: 'POST',
 					url,
 					headers: {
@@ -199,6 +205,7 @@ export class FormInstanceResumeNode extends Webhook {
 					},
 					body,
 					json: true,
+					rejectUnauthorized: env.IS_PROD === 'true',
 				});
 			} catch (error) {
 				throw new Error(`continueWithNextForms failed: ${(error as Error).message}`);

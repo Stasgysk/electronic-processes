@@ -1,5 +1,3 @@
-/* global routesUtils */
-
 module.exports = (sequelize, DataTypes, name) => {
     const entity = sequelize.define(name, {
         id: {
@@ -8,36 +6,46 @@ module.exports = (sequelize, DataTypes, name) => {
             primaryKey: true,
             autoIncrement: true
         },
-        name: {
-            type: DataTypes.STRING,
+        formId: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+        },
+        userId: {
+            type: DataTypes.INTEGER,
             allowNull: true,
-            unique: true
         },
         userGroupId: {
             type: DataTypes.INTEGER,
             allowNull: true,
         },
-        email: {
+        accompanyingText: {
             type: DataTypes.TEXT,
-            allowNull: false,
-            unique: true,
-        }
+            allowNull: true,
+        },
     }, {
-        tableName: "users",
+        tableName: "forms_assignees",
         underscored: true,
         timestamps: true,
         paranoid: true,
         indexes: [
-            { unique: true, fields: ['name'] },
-            { unique: true, fields: ['email'] },
+            { fields: ['form_id'] },
+            { fields: ['user_id'] },
             { fields: ['user_group_id'] },
         ],
     });
 
     entity.associate = (models) => {
+        entity.belongsTo(models.Forms, {
+            foreignKey: 'formId',
+            as: 'Form'
+        });
+        entity.belongsTo(models.Users, {
+            foreignKey: 'userId',
+            as: 'User'
+        });
         entity.belongsTo(models.UsersGroups, {
             foreignKey: 'userGroupId',
-            as: 'UsersGroups',
+            as: 'UserGroup'
         });
     };
 
@@ -45,14 +53,15 @@ module.exports = (sequelize, DataTypes, name) => {
     entity.entity = async (where = null, eager = false) => {
         let include = [];
 
-        if(eager) {
-            // include = [
-            //     {
-            //         model: entity.associations.Organization.target, // Access the target model via associations
-            //         as: 'Organization',
-            //     }
-            // ];
-        }
+        // if(eager) {
+        //     include = [
+        //         {
+        //             model: entity.associations.Forms.target,
+        //             as: 'Forms',
+        //         }
+        //     ];
+        // }
+
         return entity.findOne({
             include: (eager ? include : null),
             where: where,

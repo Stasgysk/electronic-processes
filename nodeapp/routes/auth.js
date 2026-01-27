@@ -113,8 +113,6 @@ router.post('/refresh', async (req, res) => {
             return res.status(401).json(resBuilder.fail('Unauthorized'));
         }
 
-        logger.debug(tokenResponse)
-
         session.refreshToken = tokenResponse.refresh_token;
         session.expiresAt = Date.now() + (tokenResponse['refresh_expires_in'] * 1000);
         await session.save();

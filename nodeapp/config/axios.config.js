@@ -1,4 +1,19 @@
-let axios = require('axios');
+const axios = require('axios');
+const http = require('http');
+const https = require('https');
+
+axios.defaults.httpAgent = new http.Agent({
+    keepAlive: true,
+    maxSockets: 50
+});
+
+axios.defaults.httpsAgent = new https.Agent({
+    rejectUnauthorized: false,
+    keepAlive: true,
+    maxSockets: 50
+});
+
+axios.defaults.proxy = false;
 
 axios.interceptors.request.use((config) => {
     const msg = `${config.url} - "${config.method?.toUpperCase()}", DATA: ${JSON.stringify(config.data)}`;

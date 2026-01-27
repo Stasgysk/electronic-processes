@@ -11,5 +11,11 @@
   "formNotFound": "Form not found",
   "back": "Back",
   "submit": "Submit",
-  "formsAwaitingActions": "Forms awaiting actions"
+  "formsAwaitingActions": "Forms awaiting actions",
+  "filledForms": "Filled forms",
+  "formFieldInvalid": "Form field value is invalid",
+  "initialUserName": "Form Initialized by user",
+  "requestor": "Requestor",
+  "status": "Status",
+  "waitingForResponse": "Waiting for response"
 }

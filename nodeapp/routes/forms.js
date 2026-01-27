@@ -3,6 +3,7 @@
 
 let express = require('express');
 const routesUtils = require("../utils/RoutesUtils");
+const {Op} = require("sequelize");
 let router = express.Router();
 
 /* GET all forms */
@@ -41,17 +42,42 @@ router.get('/:id', async function (req, res, next) {
 /* POST create new form */
 router.post('/', async function (req, res, next) {
     try {
-        const {formName, formId, formData, processId, prevFormIds, userGroupName, userEmails} = req.body;
+        const {formName, formId, formData, processId, prevFormIds, userConfig} = req.body;
 
-        if(!formName || !formId || !formData || formData.length === 0 || !processId || !userGroupName || userGroupName.length === 0) {
+        if(!formName || !formId || !formData || formData.length === 0 || !processId || !userConfig ) {
             logger.error("Required fields are not present");
             return res.status(400).json(resBuilder.fail("Bad request"));
         }
 
-        let userGroup = await postgres.UsersGroups.entity({name: userGroupName});
-
-        if(!userGroup) {
-            userGroup = await postgres.UsersGroups.create({name: userGroupName});
+        let userGroup;
+        let formAssigneeType = "group";
+        let users;
+        let userEmails;
+        switch (userConfig.type) {
+            case "group":
+                userGroup = await postgres.UsersGroups.entity({name: userConfig.data.groupName});
+                if(!userGroup) {
+                    userGroup = await postgres.UsersGroups.create({name: userConfig.data.groupName});
+                }
+                break;
+            case "emails":
+                switch (userConfig.data.mode) {
+                    case "shared":
+                        formAssigneeType = "shared_emails";
+                        users = userConfig.data.emails;
+                        userEmails = userConfig.data.emails.join(',');
+                        break;
+                    case "individual":
+                        formAssigneeType = "individual_emails";
+                        users = userConfig.data.users;
+                        userEmails = userConfig.data.users.map(u => u.email).join(',');
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            default:
+                break;
         }
 
         if(prevFormIds) {
@@ -72,7 +98,7 @@ router.post('/', async function (req, res, next) {
                         formId: prevFormId,
                         formData: {"tempData": "tempData"},
                         processId: processId,
-                        userGroupId: userGroup.dataValues.id,
+                        formAssigneeType: "temp",
                     }
 
                     await postgres.Forms.create(prevFormData);
@@ -87,7 +113,6 @@ router.post('/', async function (req, res, next) {
         }
 
         const ifFormExists = await postgres.Forms.entity({formId: formId});
-        const formssss = await postgres.Forms.entities();
 
         const process = await postgres.Processes.entity({id: processId});
 
@@ -99,13 +124,13 @@ router.post('/', async function (req, res, next) {
         if(ifFormExists) {
             ifFormExists.formName = formName;
             ifFormExists.formData = formData;
-            ifFormExists.userGroupId = userGroup.dataValues.id;
             ifFormExists.isStartingNode = !prevFormIds;
-            ifFormExists.usersEmails = userEmails;
+            ifFormExists.formAssigneeType = formAssigneeType;
+
+            userEmails ? await createUsersDependencies(userEmails, ifFormExists.dataValues.id) : null;
+            await createFormsAssignees(ifFormExists.dataValues.id, users, userGroup?.id);
 
             await ifFormExists.save();
-
-            await createUsersDependencies(userGroup.dataValues.id, userEmails, ifFormExists.dataValues.id);
 
             return res.status(200).json(resBuilder.success(ifFormExists));
         } else {
@@ -114,59 +139,26 @@ router.post('/', async function (req, res, next) {
                 formId: formId,
                 formData: formData,
                 processId: processId,
-                userGroupId: userGroup.dataValues.id,
                 isStartingNode: !prevFormIds,
-                usersEmails: userEmails,
+                formAssigneeType: formAssigneeType,
             }
 
             const form = await postgres.Forms.create(newFormData);
 
-            await createUsersDependencies(userGroup.dataValues.id, userEmails, form.dataValues.id);
+            userEmails ? await createUsersDependencies(userEmails, form.dataValues.id) : null;
+            await createFormsAssignees(form.dataValues.id, users, userGroup?.id);
 
             if(form) {
                 return res.status(200).json(resBuilder.success(form));
-            } else {
-                return res.status(200).json(resBuilder.success("Form is not created"));
             }
+
+            throw new Error("Form is not created");
         }
     } catch (e) {
         logger.error(e);
         return res.status(500).json(resBuilder.error("Something went wrong, while creating a new form"));
     }
 });
-
-async function createUsersDependencies(userGroupId, userEmails, formId) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const emails = userEmails
-        .split(',')
-        .map(e => e.trim())
-        .filter(Boolean)
-        .filter(email => emailRegex.test(email));
-
-    const userIds = [];
-    for (const email of emails) {
-        let user = await postgres.Users.entity({ email });
-        if (!user) {
-            user = await postgres.Users.create({ email, userGroupId });
-        }
-        userIds.push(user.dataValues.id);
-    }
-
-    const existingDeps = await postgres.UsersFormsDependencies.entities({ formId });
-
-    for (const dep of existingDeps) {
-        if (!userIds.includes(dep.dataValues.userId)) {
-            await dep.destroy();
-        }
-    }
-
-    const existingUserIds = existingDeps.map(dep => dep.dataValues.userId);
-    for (const userId of userIds) {
-        if (!existingUserIds.includes(userId)) {
-            await postgres.UsersFormsDependencies.create({ formId, userId });
-        }
-    }
-}
 
 /* PUT update form */
 router.put('/:id', async function (req, res, next) {
@@ -203,14 +195,149 @@ router.get('/available/:userGroupId', async function (req, res, next) {
     try {
         const {eager, length, offset} = routesUtils.getDefaultRequestParams(req);
 
-        const { userGroupId } = req.params;
+        let { userGroupId } = req.params;
 
-        const forms = await postgres.Forms.entities({isStartingNode: true, userGroupId}, eager, null, length, offset);
+        userGroupId = parseInt(userGroupId);
+
+        let forms = await postgres.Forms.entities({isStartingNode: true}, true, null, length, offset);
+        forms = forms.filter(form => form.dataValues.FormsAssignees.some(f => f.userGroupId === userGroupId || f.userId === req.userId) === true);
+
         return res.status(200).json(resBuilder.success(forms));
     } catch (e) {
         logger.error(e);
         return res.status(500).json(resBuilder.error("Something went wrong, while getting all available forms"));
     }
 });
+
+async function createUsersDependencies(userEmails, formId) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emails = userEmails
+        .split(',')
+        .map(e => e.trim())
+        .filter(Boolean)
+        .filter(email => emailRegex.test(email));
+
+    const userIds = [];
+    for (const email of emails) {
+        let user = await postgres.Users.entity({ email });
+        if (!user) {
+            user = await postgres.Users.create({ email });
+        }
+        userIds.push(user.dataValues.id);
+    }
+
+    const existingDeps = await postgres.UsersFormsDependencies.entities({ formId });
+
+    for (const dep of existingDeps) {
+        if (!userIds.includes(dep.dataValues.userId)) {
+            await dep.destroy();
+        }
+    }
+
+    const existingUserIds = existingDeps.map(dep => dep.dataValues.userId);
+    for (const userId of userIds) {
+        if (!existingUserIds.includes(userId)) {
+            await postgres.UsersFormsDependencies.create({ formId, userId });
+        }
+    }
+}
+
+async function createFormsAssignees(formId, users = null, userGroupId = null) {
+    const resultObjects = [];
+    if(users && users.length > 0) {
+        for(let user of users) {
+            let userId;
+            let note;
+            if(user.email) {
+                userId = await getUserIdOrCreateUser(user.email);
+                note = user.note;
+            } else {
+                userId = await getUserIdOrCreateUser(user);
+            }
+            resultObjects.push({
+                formId,
+                userGroupId,
+                userId: userId,
+                accompanyingText: note ? note : null,
+            })
+        }
+    } else {
+        resultObjects.push({
+            formId,
+            userGroupId,
+            userId: null,
+            accompanyingText: null,
+        })
+    }
+
+    // ✅ Получаем все существующие assignees
+    const existingAssignees = await postgres.FormsAssignees.entities({
+        formId: formId,
+        userGroupId: userGroupId
+    });
+
+    // ✅ Создаем Set с ключами новых assignees
+    const newAssigneesKeys = new Set(
+        resultObjects.map(obj => `${obj.userId || 'NULL'}-${obj.userGroupId || 'NULL'}`)
+    );
+
+    // ✅ Удаляем только те assignees, которых нет в новом списке
+    for(let existingAssignee of existingAssignees) {
+        const existingKey = `${existingAssignee.userId || 'NULL'}-${existingAssignee.userGroupId || 'NULL'}`;
+
+        if(!newAssigneesKeys.has(existingKey)) {
+            await existingAssignee.destroy();
+            logger.info(`Deleted FormsAssignee: id=${existingAssignee.id}, formId=${formId}, userId=${existingAssignee.userId}`);
+        }
+    }
+
+    // ✅ Создаем или обновляем assignees
+    for(let resultObject of resultObjects) {
+        const whereCondition = {
+            formId: resultObject.formId,
+        };
+
+        // ✅ Правильно обрабатываем null значения
+        if(resultObject.userGroupId !== null && resultObject.userGroupId !== undefined) {
+            whereCondition.userGroupId = resultObject.userGroupId;
+        } else {
+            whereCondition.userGroupId = null;
+        }
+
+        if(resultObject.userId !== null && resultObject.userId !== undefined) {
+            whereCondition.userId = resultObject.userId;
+        } else {
+            whereCondition.userId = null;
+        }
+
+        const ifFormsAssigneesExists = await postgres.FormsAssignees.entity(whereCondition);
+
+        if(!ifFormsAssigneesExists) {
+            await postgres.FormsAssignees.create(resultObject);
+            logger.info(`Created FormsAssignee: formId=${formId}, userId=${resultObject.userId}, userGroupId=${resultObject.userGroupId}`);
+        } else {
+            // ✅ Обновляем только если данные изменились
+            let needsUpdate = false;
+
+            if(ifFormsAssigneesExists.accompanyingText !== resultObject.accompanyingText) {
+                ifFormsAssigneesExists.accompanyingText = resultObject.accompanyingText;
+                needsUpdate = true;
+            }
+
+            if(needsUpdate) {
+                await ifFormsAssigneesExists.save();
+                logger.info(`Updated FormsAssignee: id=${ifFormsAssigneesExists.id}, formId=${formId}`);
+            }
+        }
+    }
+}
+
+async function getUserIdOrCreateUser(email) {
+    let userId = await postgres.Users.entity({email: email});
+    if(!userId) {
+        userId = await postgres.Users.create({ email: email });
+    }
+    return userId.dataValues.id;
+}
 
 module.exports = router;

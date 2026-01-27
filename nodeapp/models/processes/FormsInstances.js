@@ -40,7 +40,15 @@ module.exports = (sequelize, DataTypes, name) => {
         processInstanceId: {
             type: DataTypes.INTEGER,
             allowNull: false,
-        }
+        },
+        instanceAssigneeType: {
+            type: DataTypes.ENUM('group', 'shared_emails', 'individual_emails'),
+            allowNull: false,
+        },
+        assigneeId: {
+            type: DataTypes.JSON,
+            allowNull: false,
+        },
     }, {
         tableName: "forms_instances",
         underscored: true,
@@ -57,7 +65,7 @@ module.exports = (sequelize, DataTypes, name) => {
 
     entity.associate = (models) => {
         entity.belongsTo(models.ProcessesInstances, {
-            foreignKey: 'formInstanceId',
+            foreignKey: 'processInstanceId',
             as: 'processInstance'
         });
         entity.belongsTo(models.Forms, {
@@ -77,7 +85,7 @@ module.exports = (sequelize, DataTypes, name) => {
         if(eager) {
             include = [
                 {
-                    model: entity.associations.processInstances.target,
+                    model: entity.associations.processInstance.target,
                     as: 'processInstance',
                 },
                 {
@@ -104,7 +112,7 @@ module.exports = (sequelize, DataTypes, name) => {
         if(eager) {
             include = [
                 {
-                    model: entity.associations.processInstances.target,
+                    model: entity.associations.processInstance.target,
                     as: 'processInstance',
                 },
                 {

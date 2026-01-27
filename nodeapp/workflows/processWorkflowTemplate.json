@@ -10,12 +10,12 @@
         "type": "CUSTOM.formInstanceStartNode",
         "typeVersion": 1,
         "position": [
-          0,
-          0
+          48,
+          -64
         ],
-        "id": "c86cbcfc-dfec-48c5-ba3d-7f30da8f3216",
-        "name": "Form Start Trigger",
-        "webhookId": "059652a8-50a9-4571-a311-9aa51ed321bb",
+        "id": "5a56f954-02b6-429b-9e75-1185d6411164",
+        "name": "Spúšťač inštancie formulára",
+        "webhookId": "c09d13a3-2d65-419e-bd4a-4711ad445a98",
         "credentials": {
           "httpBasicAuth": {
             "id": "psgf0RRixXJNYGmq",
@@ -30,12 +30,12 @@
         "type": "CUSTOM.formInstanceResumeNode",
         "typeVersion": 1,
         "position": [
-          208,
-          0
+          272,
+          48
         ],
-        "id": "68d8310d-2449-4d03-87c8-a5ea6d20f17d",
-        "name": "Form Instance Resume",
-        "webhookId": "498baddb-0ad3-4bbc-b1de-c46829604f33",
+        "id": "162eaa80-462d-43fd-8a41-ed878386957b",
+        "name": "Čakanie na odoslanie formulára",
+        "webhookId": "2e767c90-696d-46d9-869d-57c1b84e1cf1",
         "credentials": {
           "httpBasicAuth": {
             "id": "psgf0RRixXJNYGmq",
@@ -46,11 +46,12 @@
     ]
   ],
   "connections": {
-    "Form Start Trigger": {
+    "Spúšťač inštancie formulára": {
       "main": [
+        [],
         [
           {
-            "node": "Form Instance Resume",
+            "node": "Čakanie na odoslanie formulára",
             "type": "main",
             "index": 0
           }

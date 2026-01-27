@@ -1,6 +1,5 @@
-import React, {useEffect, useState} from "react";
+import React from "react";
 import {useUser} from "../contexts/UserContext";
-import {getAvailableForms} from "../api/forms.service";
 import {useTranslation} from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
@@ -37,8 +36,8 @@ export default function AvailableForms(props) {
                         </thead>
                         <tbody>
                         {props.forms.map((form) => (
-                            <tr key={form.id} onClick={() => navigate(`/form/${form.id}`, { state: { form } })} style={{ cursor: "pointer" }}>
-                                <td>{form.formName}</td>
+                            <tr key={form.id} onClick={() => navigate(`/form/${form.id}?type=start`, { state: { form } })} style={{ cursor: "pointer" }}>
+                                <td>{form.Processes.name}</td>
                                 <td>{new Date(form.createdAt).toLocaleDateString()}</td>
                             </tr>
                         ))}

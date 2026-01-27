@@ -48,10 +48,9 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
-      N8N_PROTOCOL: https
+      N8N_PROTOCOL: http
       N8N_SSL_CERT: /files/fullchain.pem
       N8N_SSL_KEY: /files/privkey.pem
-      NODE_TLS_REJECT_UNAUTHORIZED: 0
     depends_on:
       postgres:
         condition: service_healthy

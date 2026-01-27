@@ -1,5 +1,3 @@
-const {post} = require("axios");
-
 function isSessionExpired(session) {
     return new Date() > session.expiresAt;
 }

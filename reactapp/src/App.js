@@ -1,4 +1,4 @@
-import { useState } from "react";
+import {useEffect, useState} from "react";
 import "./App.css";
 import "./i18n";
 import Header from "./components/Header";
@@ -7,31 +7,50 @@ import { UserProvider, useUser } from "./contexts/UserContext";
 import GroupSelector from "./components/GroupSelector";
 import AvailableForms from "./components/AvailableForms";
 import Forms from "./components/Forms";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {BrowserRouter as Router, Routes, Route, useLocation} from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { getAvailableForms, getAwaitingForms } from "./api/forms.service";
+import { getAvailableForms } from "./api/forms.service";
 import {useFormsLoader} from "./hooks/useFormsLoader";
+import AwaitingForms from "./components/AwaitingForms";
+import FilledForms from "./components/FilledForms";
+import {getAwaitingForms} from "./api/formsInstances.service";
+import {getFilledProcessesAndFormsInstances} from "./api/processesInstances.service";
 
 function AppContent() {
+    const location = useLocation();
     const { t } = useTranslation();
     const { user, loading, error, updateUser } = useUser();
     const [openSection, setOpenSection] = useState({
         available: true,
-        second: false,
+        second: true,
+        filled: false,
     });
+
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    useEffect(() => {
+        if (location.state?.refresh) {
+            setRefreshKey(prev => prev + 1);
+        }
+    }, [location.state]);
 
     const {
         forms: availableForms,
         loaded: availableFormsLoaded,
         loadingError: availableFormsLoadingError,
-    } = useFormsLoader(user, getAvailableForms, t);
+    } = useFormsLoader(user, getAvailableForms, t, refreshKey);
 
-    // ✅ Загрузка ожидающих форм через тот же хук
-    // const {
-    //     forms: awaitingForms,
-    //     loaded: awaitingFormsLoaded,
-    //     loadingError: awaitingFormsLoadingError,
-    // } = useFormsLoader(user, getAwaitingForms, t);
+    const {
+        forms: awaitingForms,
+        loaded: awaitingFormsLoaded,
+        loadingError: awaitingFormsLoadingError,
+    } = useFormsLoader(user, getAwaitingForms, t, refreshKey);
+
+    const {
+        forms: filledForms,
+        loaded: filledFormsLoaded,
+        loadingError: filledFormsLoadingError,
+    } = useFormsLoader(user, getFilledProcessesAndFormsInstances, t, refreshKey);
 
     const toggleSection = (section) => {
         setOpenSection((prev) => ({
@@ -87,11 +106,31 @@ function AppContent() {
                                     </h2>
                                     {openSection.second && (
                                         <div className="table-wrapper">
-                                            {/*<AwaitingForms*/}
-                                            {/*    forms={awaitingForms}*/}
-                                            {/*    loading={!awaitingFormsLoaded}*/}
-                                            {/*    error={awaitingFormsLoadingError}*/}
-                                            {/*/>*/}
+                                            <AwaitingForms
+                                                forms={awaitingForms}
+                                                loading={!awaitingFormsLoaded}
+                                                error={awaitingFormsLoadingError}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="main-section">
+                                    <h2
+                                        className="section-header"
+                                        onClick={() => toggleSection("filled")}
+                                    >
+                                        {t("filledForms")}
+                                        <span className="arrow">
+                                            {openSection.filled ? "▲" : "▼"}
+                                        </span>
+                                    </h2>
+                                    {openSection.filled && (
+                                        <div className="table-wrapper">
+                                            <FilledForms
+                                                forms={filledForms}
+                                                loading={!filledFormsLoaded}
+                                                error={filledFormsLoadingError}
+                                            />
                                         </div>
                                     )}
                                 </div>

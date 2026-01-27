@@ -1,10 +1,10 @@
 require('dotenv').config();
+require('./config/axios.config');
 let createError = require('http-errors');
 let express = require('express');
 let path = require('path');
 let cookieParser = require('cookie-parser');
 let http = require('http');
-const axiosLogger = require('./utils/AxiosLogger');
 const cors = require('cors');
 
 let indexRouter = require('./routes/index');
@@ -14,6 +14,7 @@ let usersGroupsRouter = require('./routes/usersGroups');
 let formsRouter = require('./routes/forms');
 let formsInstancesRouter = require('./routes/formsInstances');
 let processesRouter = require('./routes/processes');
+let processesInstancesRouter = require('./routes/processesInstances');
 let n8nRouter = require('./routes/n8n');
 const fs = require("fs");
 let logger = require('./utils/Logger');
@@ -46,7 +47,7 @@ const authWrapper = require("./utils/AuthWrapper");
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'hbs');
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -94,6 +95,7 @@ app.use('/usersGroups', usersGroupsRouter);
 app.use('/forms', formsRouter);
 app.use('/formsInstances', formsInstancesRouter);
 app.use('/processes', processesRouter);
+app.use('/processesInstances', processesInstancesRouter);
 app.use('/n8n', n8nRouter);
 
 app.use(function(req, res, next) {

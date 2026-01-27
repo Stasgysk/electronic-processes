@@ -210,7 +210,19 @@ async function updateOrCreateProcessWorkflowEntity(processWorkflow, newData, ver
             await postgres.Folder.create(folderData);
         }
 
-        await postgres.WorkflowEntities.create(processWorkflowTemplateCopy);
+        const workflow = await postgres.WorkflowEntities.create(processWorkflowTemplateCopy);
+
+        const workflowHistoryData = {
+            versionId: versionId,
+            workflowId: workflow.dataValues.id,
+            authors: "system migration",
+            nodes: workflow.dataValues.nodes,
+            connections: workflow.dataValues.connections,
+            name: null,
+            autosaved: false,
+        };
+
+        await postgres.WorkflowHistory.create(workflowHistoryData);
         await postgres.SharedWorkflow.create(sharedWorkflowData);
 
         await patchWorkflow(workflowId);
@@ -219,12 +231,20 @@ async function updateOrCreateProcessWorkflowEntity(processWorkflow, newData, ver
 }
 
 async function patchWorkflow(workflowId) {
-    await axios.patch(
+    const cookie = await getAuthCookie();
+
+    const { data: workflow } = await axios.get(
         `${process.env.N8N_BASE_URL}rest/workflows/${workflowId}`,
-        { active: true },
+        { headers: { Cookie: cookie } }
+    );
+
+    await axios.post(
+        `${process.env.N8N_BASE_URL}rest/workflows/${workflowId}/activate`,
+        { versionId: workflow.data.versionId },
         {
             headers: {
-                Cookie: await getAuthCookie()
+                'Content-Type': 'application/json',
+                Cookie: cookie
             }
         }
     );

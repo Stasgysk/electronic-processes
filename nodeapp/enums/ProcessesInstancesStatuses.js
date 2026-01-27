@@ -1,9 +1,9 @@
 // ProcessesInstancesStatuses.js
 
-const ProcessesStatusesStatusesEnum = Object.freeze({
+const ProcessesInstancesStatusesEnum = Object.freeze({
     PROCESSING: 'processing',
     ENDED: 'ended',
     ERROR: 'error',
 });
 
-module.exports = ProcessesStatusesStatusesEnum;
+module.exports = ProcessesInstancesStatusesEnum;

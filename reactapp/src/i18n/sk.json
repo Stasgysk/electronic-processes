@@ -11,5 +11,11 @@
   "formNotFound": "Formulár nebol nájdený",
   "back": "Späť",
   "submit": "Odoslať",
-  "formsAwaitingActions": "Formuláre čakajúce na spracovanie"
+  "formsAwaitingActions": "Formuláre čakajúce na spracovanie",
+  "filledForms": "Vyplnené formuláre",
+  "formFieldInvalid": "Hodnota poľa formulára je neplatná",
+  "initialUserName": "Formulár inicializovaný používateľom",
+  "requestor": "Žiadateľ",
+  "status": "Stav",
+  "waitingForResponse": "Čakanie na odpoveď"
 }

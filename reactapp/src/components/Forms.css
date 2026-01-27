@@ -1,7 +1,7 @@
 .forms-page {
-    margin: 0 auto;
-    padding: 2rem 1rem;
-}
+     margin: 0 auto;
+     padding: 2rem 1rem;
+ }
 
 .header-row {
     position: relative;
@@ -110,4 +110,19 @@
 .loading-text {
     margin-top: 1rem;
     color: #5f6368;
+}
+
+.requestor-text {
+    margin-top: 0.5rem;
+    color: #535658;
+    font-weight: 400;
+}
+
+.main-section-form {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    padding: 1.5rem 2rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    margin-bottom: 1rem;
 }

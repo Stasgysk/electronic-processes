@@ -99,6 +99,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem("accessToken");
         localStorage.removeItem("csrfToken");
         localStorage.removeItem("expiresIn");
+        navigate('/');
     };
 
     return (
