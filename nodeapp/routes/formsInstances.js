@@ -26,7 +26,10 @@ router.get('/', async function (req, res, next) {
 router.get('/available', async function (req, res) {
     try {
         const { eager, length, offset } = routesUtils.getDefaultRequestParams(req);
-        const { userGroupId, formId, processInstanceId } = req.query;
+        const { formId, processInstanceId } = req.query;
+
+        const currentUser = await postgres.Users.entity({ id: req.userId });
+        const userGroupId = currentUser ? currentUser.userGroupId : null;
 
         let filters;
         if(formId && processInstanceId) {
@@ -37,13 +40,16 @@ router.get('/available', async function (req, res) {
 
         let formsInstances = await postgres.FormsInstances.entities(filters, eager, null, length, offset);
 
-        formsInstances = formsInstances.filter(fi =>
-            (fi.instanceAssigneeType === "group" && fi.assigneeId.includes(userGroupId)) ||
-            (
-                (fi.instanceAssigneeType === "individual_emails" || fi.instanceAssigneeType === "shared_emails") &&
-                fi.assigneeId.includes(req.userId)
-            )
-        );
+        const uid = parseInt(req.userId);
+        const gid = userGroupId ? parseInt(userGroupId) : null;
+
+        formsInstances = formsInstances.filter(fi => {
+            const ids = (fi.assigneeId || []).map(Number);
+            if (fi.instanceAssigneeType === "group") {
+                return gid !== null && ids.includes(gid);
+            }
+            return ids.includes(uid);
+        });
 
         if (formsInstances.length === 0) {
             return res.status(200).json(resBuilder.success([]));
@@ -282,6 +288,12 @@ router.post('/', async function (req, res, next) {
                             isUserHasFormAccess = true;
                         }
                         break;
+                    case "role":
+                        if (user.dataValues.id === formInstance.dataValues.assigneeId[0]) {
+                            formInstanceWithUserAccess = formInstance;
+                            isUserHasFormAccess = true;
+                        }
+                        break;
                 }
 
                 if (isUserHasFormAccess) {
@@ -344,22 +356,47 @@ router.post('/', async function (req, res, next) {
                 }
             }
 
-            await axios.post(
-                formInstanceWithUserAccess.webhookUrl.replace('localhost', process.env.N8N_CONTAINER_NAME),
-                {
-                    "isFirstNode": false,
-                    "nextNodesIds": nextWaitingFormsIds,
-                    "formData": formData,
-                    "formName": form.dataValues.formName,
-                    "formSubmittedByUser": formSubmittedByUser
-                },
-                {
-                    auth: {
-                        username: process.env.N8N_AUTH_USER,
-                        password: process.env.N8N_AUTH_PASSWORD,
+            try {
+                const storedUrl = formInstanceWithUserAccess.webhookUrl;
+                let isValidUrl = false;
+                try { new URL(storedUrl); isValidUrl = true; } catch {}
+
+                const n8nAuth = { auth: { username: process.env.N8N_AUTH_USER, password: process.env.N8N_AUTH_PASSWORD } };
+
+                if (isValidUrl) {
+                    await axios.post(
+                        storedUrl.replace('localhost', process.env.N8N_CONTAINER_NAME),
+                        {
+                            "isFirstNode": false,
+                            "nextNodesIds": nextWaitingFormsIds,
+                            "formData": formData,
+                            "formName": form.dataValues.formName,
+                            "formSubmittedByUser": formSubmittedByUser
+                        },
+                        n8nAuth
+                    );
+                } else {
+                    logger.warn(`webhookUrl is invalid ("${storedUrl}") for formInstanceId=${formInstanceWithUserAccess.dataValues.formInstanceId}. Using start-webhook fallback.`);
+                    const fallbackUrl = `${process.env.N8N_BASE_URL}webhook/${formInstanceWithUserAccess.dataValues.formInstanceId}/start`;
+                    const payload = {
+                        "isFirstNode": true,
+                        "nextNodesIds": nextWaitingFormsIds,
+                        "formData": formData,
+                        "formName": form.dataValues.formName,
+                        "formSubmittedByUser": formSubmittedByUser,
+                    };
+                    if (nextWaitingFormsIds.length > 0) {
+                        const nf = await postgres.Forms.entity({ formId: nextWaitingFormsIds[0].formInstanceId });
+                        if (nf) {
+                            payload.nextFormData = nf.dataValues.formData;
+                            payload.nextFormName = nf.dataValues.formName;
+                        }
                     }
+                    await axios.post(fallbackUrl, payload, n8nAuth);
                 }
-            );
+            } catch (e) {
+                logger.error(`Failed to notify n8n after form submission: ${e.message}`);
+            }
 
             await isProcessFinished(processInstanceId);
 
@@ -427,43 +464,70 @@ async function createFollowUpFormsInstances(form, formInstanceId, processStatusI
             formStatus = formStatuses.WAITING;
         }
 
-        for (let formAssignee of processForm.FormsAssignees) {
-            let formAssigneeId;
-            let isBreakAfterOneExec = false;
+        if (processForm.formAssigneeType === "role") {
+            const roleAssignee = processForm.FormsAssignees.find(fa => fa.roleName);
+            const resolvedUserIds = roleAssignee
+                ? await resolveRoleToUsers(roleAssignee.roleName, user.dataValues.id)
+                : [];
 
-            switch (processForm.formAssigneeType) {
-                case "group":
-                    formAssigneeId = [formAssignee.userGroupId];
-                    break;
-                case "shared_emails":
-                    formAssigneeId = processForm.FormsAssignees.map(f => f.userId);
-                    isBreakAfterOneExec = true;
-                    break;
-                case "individual_emails":
-                    formAssigneeId = [formAssignee.userId];
-                    break;
+            for (const resolvedUserId of resolvedUserIds) {
+                const newFormInstanceData = {
+                    formData: {},
+                    formInstanceId: processForm.dataValues.formId,
+                    status: formStatus,
+                    formId: processForm.id,
+                    webhookUrl: webhookUrl,
+                    processInstanceId: processStatusId,
+                    instanceAssigneeType: "role",
+                    assigneeId: [resolvedUserId],
+                };
+                const newFormInstance = await postgres.FormsInstances.create(newFormInstanceData);
+                if (newFormInstance.dataValues.status === formStatuses.WAITING) {
+                    nextNodesIds.push({
+                        "formProcessId": newFormInstance.dataValues.id,
+                        "formInstanceId": newFormInstance.dataValues.formInstanceId,
+                    });
+                }
             }
+        } else {
+            for (let formAssignee of processForm.FormsAssignees) {
+                let formAssigneeId;
+                let isBreakAfterOneExec = false;
 
-            const newFormInstanceData = {
-                formData: {},
-                formInstanceId: processForm.dataValues.formId,
-                status: formStatus,
-                formId: processForm.id,
-                webhookUrl: webhookUrl,
-                processInstanceId: processStatusId,
-                instanceAssigneeType: processForm.formAssigneeType,
-                assigneeId: formAssigneeId,
-            }
+                switch (processForm.formAssigneeType) {
+                    case "group":
+                        formAssigneeId = [formAssignee.userGroupId];
+                        break;
+                    case "shared_emails":
+                        formAssigneeId = processForm.FormsAssignees.map(f => f.userId);
+                        isBreakAfterOneExec = true;
+                        break;
+                    case "individual_emails":
+                        formAssigneeId = [formAssignee.userId];
+                        break;
+                }
 
-            const newFormInstance = await postgres.FormsInstances.create(newFormInstanceData);
-            if (newFormInstance.dataValues.status === formStatuses.WAITING) {
-                nextNodesIds.push({
-                    "formProcessId": newFormInstance.dataValues.id,
-                    "formInstanceId": newFormInstance.dataValues.formInstanceId
-                });
-            }
-            if (isBreakAfterOneExec) {
-                break;
+                const newFormInstanceData = {
+                    formData: {},
+                    formInstanceId: processForm.dataValues.formId,
+                    status: formStatus,
+                    formId: processForm.id,
+                    webhookUrl: webhookUrl,
+                    processInstanceId: processStatusId,
+                    instanceAssigneeType: processForm.formAssigneeType,
+                    assigneeId: formAssigneeId,
+                }
+
+                const newFormInstance = await postgres.FormsInstances.create(newFormInstanceData);
+                if (newFormInstance.dataValues.status === formStatuses.WAITING) {
+                    nextNodesIds.push({
+                        "formProcessId": newFormInstance.dataValues.id,
+                        "formInstanceId": newFormInstance.dataValues.formInstanceId
+                    });
+                }
+                if (isBreakAfterOneExec) {
+                    break;
+                }
             }
         }
     }
@@ -499,6 +563,52 @@ async function isProcessFinished(processInstanceId) {
     }
 }
 
+
+async function resolveRoleToUsers(roleName, initiatorUserId) {
+    const { Op } = require('sequelize');
+    const anyPatternRole = await postgres.OrgRoles.findOne({
+        where: { name: roleName, emailPattern: { [Op.not]: null } },
+    });
+
+    if (anyPatternRole) {
+        const allRoles = await postgres.OrgRoles.findAll({ where: { name: roleName } });
+        const resolvedUserIds = new Set();
+        for (const role of allRoles) {
+            const userOrgRoles = await postgres.UserOrgRoles.entities({ orgRoleId: role.id });
+            userOrgRoles.forEach(uor => resolvedUserIds.add(uor.userId));
+        }
+        return [...resolvedUserIds];
+    }
+
+    const initiator = await postgres.Users.entity({ id: initiatorUserId });
+    if (!initiator) return [];
+
+    const startUnitIds = new Set();
+    if (initiator.orgUnitId) startUnitIds.add(initiator.orgUnitId);
+
+    const workplaces = await postgres.UserWorkplaces.entities({ userId: initiatorUserId });
+    workplaces.forEach(wp => startUnitIds.add(wp.orgUnitId));
+
+    if (startUnitIds.size === 0) return [];
+
+    const resolvedUserIds = new Set();
+    for (const startUnitId of [...startUnitIds]) {
+        let currentUnitId = startUnitId;
+        while (currentUnitId != null) {
+            const orgRole = await postgres.OrgRoles.entity({ orgUnitId: currentUnitId, name: roleName });
+            if (orgRole) {
+                const userOrgRoles = await postgres.UserOrgRoles.entities({ orgRoleId: orgRole.id });
+                if (userOrgRoles.length > 0) {
+                    userOrgRoles.forEach(uor => resolvedUserIds.add(uor.userId));
+                    break;
+                }
+            }
+            const unit = await postgres.OrgUnits.entity({ id: currentUnitId });
+            currentUnitId = unit ? unit.parentId : null;
+        }
+    }
+    return [...resolvedUserIds];
+}
 
 async function getAllPrevFormIds(startFormId) {
     const visited = new Set();

@@ -28,7 +28,6 @@ export class DynamicForm implements INodeType {
 			name: 'Formulár',
 		},
 		inputs: ['main'],
-		inputNames: ['Hlavny vstup', 'Dopln. info'],
 		outputs: [
 			'main',
 			{ type: NodeConnectionTypes.Main, displayName: 'Before form' },
@@ -42,8 +41,25 @@ export class DynamicForm implements INodeType {
 				options: [
 					{ name: 'Podľa skupiny používateľov', value: 'group' },
 					{ name: 'Podľa e-mailov', value: 'emails' },
+					{ name: 'Podľa roly', value: 'role' },
 				],
 				default: 'group',
+			},
+			{
+				displayName: 'Rola',
+				name: 'roleName',
+				type: 'options',
+				required: true,
+				typeOptions: {
+					loadOptionsMethod: 'getOrgRoles',
+				},
+				default: '',
+				description: 'Rola bude automaticky priradená podľa organizačnej jednotky iniciátora procesu.',
+				displayOptions: {
+					show: {
+						userSelectionMethod: ['role'],
+					},
+				},
 			},
 			{
 				displayName: 'Skupina Používateľov',
@@ -361,6 +377,30 @@ export class DynamicForm implements INodeType {
 					value: group.name,
 				}));
 			},
+			async getOrgRoles(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+				const env = process.env;
+				const response = await this.helpers.request({
+					method: 'GET',
+					url: `${env.NODE_APP_URL}/orgRoles`,
+					json: true,
+					headers: {
+						'X-Service-Auth': env.INTERNAL_SECRET,
+					},
+					rejectUnauthorized: env.IS_PROD === 'true',
+				});
+
+				const seen = new Set<string>();
+				return (response.data || [])
+					.filter((role: any) => {
+						if (seen.has(role.name)) return false;
+						seen.add(role.name);
+						return true;
+					})
+					.map((role: any) => ({
+						name: role.name,
+						value: role.name,
+					}));
+			},
 		},
 	};
 
@@ -469,13 +509,22 @@ export class DynamicForm implements INodeType {
 		const userSelectionMethod = this.getNodeParameter('userSelectionMethod', 0, '') as string;
 
 		interface UserConfig {
-			type: 'group' | 'emails';
+			type: 'group' | 'emails' | 'role';
 			data: any;
 		}
 
 		let userConfig: UserConfig = { type: 'group', data: {} };
 
-		if (userSelectionMethod === 'group') {
+		if (userSelectionMethod === 'role') {
+			const roleName = this.getNodeParameter('roleName', 0, '') as string;
+			if (!roleName) {
+				throw new NodeOperationError(this.getNode(), 'Pole "Rola" je povinné.');
+			}
+			userConfig = {
+				type: 'role',
+				data: { roleName },
+			};
+		} else if (userSelectionMethod === 'group') {
 			const userGroup = this.getNodeParameter('userGroup', 0, '') as string;
 
 			if (!userGroup) {

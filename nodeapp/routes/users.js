@@ -3,11 +3,12 @@
 
 let express = require('express');
 let router = express.Router();
+const { reassignOrgRolesByEmailAndUnit } = require('../utils/UserUtils');
 
 /* GET user info. */
 router.get('/me', async function (req, res, next) {
     try {
-        const user = await postgres.Users.entity({ id: req.userId });
+        const user = await postgres.Users.entity({ id: req.userId }, true);
         if (!user) return res.status(404).json(resBuilder.fail('User not found'));
 
         return res.status(200).json(resBuilder.success(user));
@@ -31,19 +32,41 @@ router.get('/roles', async function (req, res, next) {
 });
 
 /* PUT update user */
-/* Now only user group id update is available */
 router.put('/', async function (req, res, next) {
     try {
-        const userGroupId = req.body.userGroupId;
-
-        const userGroup = await postgres.UsersGroups.entity({ id: userGroupId });
-        if (!userGroup) return res.status(404).json(resBuilder.fail('User group not found'));
-
+        const { userGroupId, orgUnitId } = req.body;
         const user = await postgres.Users.entity({ id: req.userId });
-        user.userGroupId = userGroupId;
+        if (!user) return res.status(404).json(resBuilder.fail('User not found'));
+
+        if (userGroupId !== undefined) {
+            const userGroup = await postgres.UsersGroups.entity({ id: userGroupId });
+            if (!userGroup) return res.status(404).json(resBuilder.fail('User group not found'));
+            if (userGroup.name === 'ADMIN') {
+                const adminCode = (req.body.adminCode || '').trim();
+                const envCode = (process.env.ADMIN_CODE || '').trim();
+                if (!envCode) {
+                    return res.status(403).json(resBuilder.fail('Admin promotion is disabled (ADMIN_CODE not set)'));
+                }
+                if (!adminCode || adminCode !== envCode) {
+                    return res.status(403).json(resBuilder.fail('Invalid admin code'));
+                }
+            }
+            user.userGroupId = userGroupId;
+        }
+
+        const newOrgUnitId = orgUnitId !== undefined ? (orgUnitId ? parseInt(orgUnitId) : null) : undefined;
+        if (newOrgUnitId !== undefined) {
+            user.orgUnitId = newOrgUnitId;
+        }
+
         await user.save();
 
-        return res.status(200).json(resBuilder.success(user));
+        if (newOrgUnitId) {
+            await reassignOrgRolesByEmailAndUnit(user.id, user.email, newOrgUnitId);
+        }
+
+        const updatedUser = await postgres.Users.entity({ id: req.userId }, true);
+        return res.status(200).json(resBuilder.success(updatedUser));
     } catch (e) {
         logger.error(e);
         return res.status(500).json(resBuilder.fail('Internal server error'));

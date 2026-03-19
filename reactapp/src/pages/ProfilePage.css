@@ -1,0 +1,180 @@
+.profile-page {
+    max-width: 620px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    background: #fff;
+    border: 1px solid #e0e4ea;
+    border-radius: 14px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.profile-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #0d6efd;
+    color: #fff;
+    font-size: 1.4rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.profile-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.profile-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0 0 2px 0;
+    color: #111;
+}
+
+.profile-email {
+    font-size: 0.875rem;
+    color: #666;
+    margin: 0 0 5px 0;
+}
+
+.profile-loading {
+    display: flex;
+    justify-content: center;
+    padding: 3rem 0;
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+.profile-section {
+    background: #fff;
+    border: 1px solid #e0e4ea;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+.profile-section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 0.35rem;
+}
+
+.profile-section-hint {
+    font-size: 0.82rem;
+    color: #888;
+    margin-bottom: 1rem;
+}
+
+.profile-empty {
+    font-size: 0.875rem;
+    color: #aaa;
+    font-style: italic;
+    margin: 0;
+}
+
+/* ── My roles ────────────────────────────────────────────────────────────── */
+.my-roles-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.my-role-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f4f7ff;
+    border: 1px solid #d0deff;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.my-role-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.my-role-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #1a3d80;
+}
+
+.my-role-unit {
+    font-size: 0.78rem;
+    color: #666;
+}
+
+.my-role-leave {
+    background: none;
+    border: none;
+    color: #bbb;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 4px;
+    border-radius: 4px;
+    line-height: 1;
+    transition: color 0.1s, background 0.1s;
+}
+
+.my-role-leave:hover {
+    color: #c62828;
+    background: #fdecea;
+}
+
+/* ── Join role form ──────────────────────────────────────────────────────── */
+.join-role-form {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 480px;
+}
+
+.join-role-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 4px;
+}
+
+.join-role-hint {
+    font-size: 0.78rem;
+    color: #aaa;
+    font-style: italic;
+    margin: 3px 0 0 0;
+}
+
+.join-role-error {
+    font-size: 0.85rem;
+    color: #c62828;
+    background: #fdecea;
+    border: 1px solid #f5c2c2;
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-top: 4px;
+}
+
+.join-role-success {
+    font-size: 0.85rem;
+    color: #1a6b2a;
+    background: #e8f5ea;
+    border: 1px solid #b7dfc0;
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-top: 4px;
+}

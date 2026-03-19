@@ -9,13 +9,8 @@ export const sendFilledForm = (body) => {
     }).then(res => res.data);
 };
 
-export const getAwaitingForms = (userGroupId, formId = null, processInstanceId = null) => {
-    let filters;
-    if(formId && processInstanceId) {
-        filters = {userGroupId: userGroupId, formId: formId, processInstanceId: processInstanceId};
-    } else {
-        filters = {userGroupId: userGroupId};
-    }
+export const getAwaitingForms = (formId = null, processInstanceId = null) => {
+    const filters = (formId && processInstanceId) ? { formId, processInstanceId } : {};
     return gsAxios.get(`/formsInstances/available`, {
         params: filters,
         headers: {

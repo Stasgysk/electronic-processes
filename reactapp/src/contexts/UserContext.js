@@ -1,6 +1,6 @@
 import React, {createContext, useContext, useEffect, useRef, useState} from "react";
 import { useAuth } from "./AuthContext";
-import {me, putGroup} from "../api/user.service";
+import {me} from "../api/user.service";
 
 const UserContext = createContext();
 
@@ -40,13 +40,8 @@ export const UserProvider = ({ children }) => {
         fetchUser();
     }, [accessToken]);
 
-    const updateUser = async (newData) => {
-        try {
-            const user = await putGroup(newData);
-            setUser(user.data);
-        } catch (err) {
-            console.log("Failed to update user:", err);
-        }
+    const updateUser = (newData) => {
+        setUser(newData);
     };
 
     return (

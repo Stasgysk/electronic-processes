@@ -1,4 +1,3 @@
-// src/components/RenderFormGroups.js
 import {Card, Row, Col, Form, Button} from "react-bootstrap";
 export function renderFormGroups(form, formValues, handleChange, t, readOnly = false) {
     if (Object.keys(form.formData).length === 0) {
@@ -35,7 +34,7 @@ export function renderFormGroups(form, formValues, handleChange, t, readOnly = f
 
                                         {["string", "number", "date"].includes(field.type) && (
                                             <>
-                                                <Form.Label>{field.name}</Form.Label>
+                                                <Form.Label column={}>{field.name}</Form.Label>
                                                 <Form.Control
                                                     type={field.type}
                                                     value={groupValue?.[key]?.value ?? field.value ?? ""}
@@ -53,7 +52,7 @@ export function renderFormGroups(form, formValues, handleChange, t, readOnly = f
 
                                         {field.type === "boolean" && (
                                             <>
-                                                <Form.Label>{field.name}</Form.Label>
+                                                <Form.Label column={}>{field.name}</Form.Label>
                                                 <Form.Select
                                                     value={
                                                         field.value === true || field.value === false ? field.value :
@@ -68,16 +67,16 @@ export function renderFormGroups(form, formValues, handleChange, t, readOnly = f
                                                         handleChange(group.type, key, e.target.value === "true", "boolean")
                                                     }
                                                 >
-                                                    <option value="">-- Vyberte --</option>
-                                                    <option value="true">Ano</option>
-                                                    <option value="false">Nie</option>
+                                                    <option value="">{t('selectOption')}</option>
+                                                    <option value="true">{t('yes')}</option>
+                                                    <option value="false">{t('no')}</option>
                                                 </Form.Select>
                                             </>
                                         )}
 
                                         {field.type === "checkbox" && (
                                             <>
-                                                <Form.Label>{field.name}</Form.Label>
+                                                <Form.Label column={}>{field.name}</Form.Label>
                                                 <div className="checkbox-wrapper">
                                                     <Form.Check
                                                         type="checkbox"
@@ -95,7 +94,7 @@ export function renderFormGroups(form, formValues, handleChange, t, readOnly = f
                                             <>
                                                 {!readOnly && (
                                                     <>
-                                                        <Form.Label>{field.name}</Form.Label>
+                                                        <Form.Label column={}>{field.name}</Form.Label>
                                                             <Form.Control
                                                                 type="file"
                                                                 isInvalid={!!groupValue?.[key]?.error}
@@ -112,7 +111,7 @@ export function renderFormGroups(form, formValues, handleChange, t, readOnly = f
 
                                                 {readOnly && field.value && (
                                                     <>
-                                                        <Form.Label>{field.name}</Form.Label>
+                                                        <Form.Label column={}>{field.name}</Form.Label>
 
                                                         <Button
                                                             className="form-control"

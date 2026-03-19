@@ -22,6 +22,10 @@ module.exports = (sequelize, DataTypes, name) => {
             type: DataTypes.TEXT,
             allowNull: true,
         },
+        roleName: {
+            type: DataTypes.TEXT,
+            allowNull: true,
+        },
     }, {
         tableName: "forms_assignees",
         underscored: true,

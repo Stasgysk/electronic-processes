@@ -19,6 +19,34 @@ router.get('/', async function (req, res, next) {
     }
 });
 
+/* GET all available forms */
+router.get('/available', async function (req, res, next) {
+    try {
+        const {eager, length, offset} = routesUtils.getDefaultRequestParams(req);
+
+        const currentUser = await postgres.Users.entity({ id: req.userId });
+        const userGroupId = currentUser ? parseInt(currentUser.userGroupId) : null;
+
+        const userOrgRoleAssignments = await postgres.UserOrgRoles.entities({ userId: req.userId }, true);
+        const userRoleNames = new Set(
+            userOrgRoleAssignments.map(uor => uor.OrgRole?.name).filter(Boolean)
+        );
+
+        let forms = await postgres.Forms.entities({isStartingNode: true}, true, null, length, offset);
+        forms = forms.filter(form => form.dataValues.FormsAssignees.some(fa => {
+            if (fa.userGroupId !== null && userGroupId !== null && fa.userGroupId === userGroupId) return true;
+            if (fa.userId !== null && fa.userId === req.userId) return true;
+            return !!(fa.roleName && userRoleNames.has(fa.roleName));
+
+        }));
+
+        return res.status(200).json(resBuilder.success(forms));
+    } catch (e) {
+        logger.error(e);
+        return res.status(500).json(resBuilder.error("Something went wrong, while getting all available forms"));
+    }
+});
+
 /* GET form by id */
 router.get('/:id', async function (req, res, next) {
     try {
@@ -53,6 +81,7 @@ router.post('/', async function (req, res, next) {
         let formAssigneeType = "group";
         let users;
         let userEmails;
+        let roleName;
         switch (userConfig.type) {
             case "group":
                 userGroup = await postgres.UsersGroups.entity({name: userConfig.data.groupName});
@@ -75,6 +104,10 @@ router.post('/', async function (req, res, next) {
                     default:
                         break;
                 }
+                break;
+            case "role":
+                formAssigneeType = "role";
+                roleName = userConfig.data.roleName;
                 break;
             default:
                 break;
@@ -128,7 +161,7 @@ router.post('/', async function (req, res, next) {
             ifFormExists.formAssigneeType = formAssigneeType;
 
             userEmails ? await createUsersDependencies(userEmails, ifFormExists.dataValues.id) : null;
-            await createFormsAssignees(ifFormExists.dataValues.id, users, userGroup?.id);
+            await createFormsAssignees(ifFormExists.dataValues.id, users, userGroup?.id, roleName);
 
             await ifFormExists.save();
 
@@ -146,7 +179,7 @@ router.post('/', async function (req, res, next) {
             const form = await postgres.Forms.create(newFormData);
 
             userEmails ? await createUsersDependencies(userEmails, form.dataValues.id) : null;
-            await createFormsAssignees(form.dataValues.id, users, userGroup?.id);
+            await createFormsAssignees(form.dataValues.id, users, userGroup?.id, roleName);
 
             if(form) {
                 return res.status(200).json(resBuilder.success(form));
@@ -190,25 +223,6 @@ router.put('/:id', async function (req, res, next) {
     }
 });
 
-/* GET all available forms */
-router.get('/available/:userGroupId', async function (req, res, next) {
-    try {
-        const {eager, length, offset} = routesUtils.getDefaultRequestParams(req);
-
-        let { userGroupId } = req.params;
-
-        userGroupId = parseInt(userGroupId);
-
-        let forms = await postgres.Forms.entities({isStartingNode: true}, true, null, length, offset);
-        forms = forms.filter(form => form.dataValues.FormsAssignees.some(f => f.userGroupId === userGroupId || f.userId === req.userId) === true);
-
-        return res.status(200).json(resBuilder.success(forms));
-    } catch (e) {
-        logger.error(e);
-        return res.status(500).json(resBuilder.error("Something went wrong, while getting all available forms"));
-    }
-});
-
 async function createUsersDependencies(userEmails, formId) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const emails = userEmails
@@ -242,7 +256,16 @@ async function createUsersDependencies(userEmails, formId) {
     }
 }
 
-async function createFormsAssignees(formId, users = null, userGroupId = null) {
+async function createFormsAssignees(formId, users = null, userGroupId = null, roleName = null) {
+    if (roleName) {
+        const existing = await postgres.FormsAssignees.entities({ formId });
+        for (const dep of existing) {
+            await dep.destroy();
+        }
+        await postgres.FormsAssignees.create({ formId, roleName, userId: null, userGroupId: null });
+        return;
+    }
+
     const resultObjects = [];
     if(users && users.length > 0) {
         for(let user of users) {
@@ -270,18 +293,15 @@ async function createFormsAssignees(formId, users = null, userGroupId = null) {
         })
     }
 
-    // ✅ Получаем все существующие assignees
     const existingAssignees = await postgres.FormsAssignees.entities({
         formId: formId,
         userGroupId: userGroupId
     });
 
-    // ✅ Создаем Set с ключами новых assignees
     const newAssigneesKeys = new Set(
         resultObjects.map(obj => `${obj.userId || 'NULL'}-${obj.userGroupId || 'NULL'}`)
     );
 
-    // ✅ Удаляем только те assignees, которых нет в новом списке
     for(let existingAssignee of existingAssignees) {
         const existingKey = `${existingAssignee.userId || 'NULL'}-${existingAssignee.userGroupId || 'NULL'}`;
 
@@ -291,13 +311,11 @@ async function createFormsAssignees(formId, users = null, userGroupId = null) {
         }
     }
 
-    // ✅ Создаем или обновляем assignees
     for(let resultObject of resultObjects) {
         const whereCondition = {
             formId: resultObject.formId,
         };
 
-        // ✅ Правильно обрабатываем null значения
         if(resultObject.userGroupId !== null && resultObject.userGroupId !== undefined) {
             whereCondition.userGroupId = resultObject.userGroupId;
         } else {
@@ -316,7 +334,6 @@ async function createFormsAssignees(formId, users = null, userGroupId = null) {
             await postgres.FormsAssignees.create(resultObject);
             logger.info(`Created FormsAssignee: formId=${formId}, userId=${resultObject.userId}, userGroupId=${resultObject.userGroupId}`);
         } else {
-            // ✅ Обновляем только если данные изменились
             let needsUpdate = false;
 
             if(ifFormsAssigneesExists.accompanyingText !== resultObject.accompanyingText) {

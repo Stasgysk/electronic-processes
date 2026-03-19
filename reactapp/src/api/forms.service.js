@@ -1,7 +1,7 @@
 import gsAxios from "./gsAxios";
 
-export const getAvailableForms = (userGroupId) => {
-    return gsAxios.get(`/forms/available/${userGroupId}`, {
+export const getAvailableForms = () => {
+    return gsAxios.get(`/forms/available`, {
         headers: {
             "Content-Type": "application/x-www-form-urlencoded",
         },

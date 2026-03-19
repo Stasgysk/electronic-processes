@@ -21,7 +21,11 @@ module.exports = (sequelize, DataTypes, name) => {
             type: DataTypes.TEXT,
             allowNull: false,
             unique: true,
-        }
+        },
+        orgUnitId: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+        },
     }, {
         tableName: "users",
         underscored: true,
@@ -39,22 +43,27 @@ module.exports = (sequelize, DataTypes, name) => {
             foreignKey: 'userGroupId',
             as: 'UsersGroups',
         });
+        entity.belongsTo(models.OrgUnits, {
+            foreignKey: 'orgUnitId',
+            as: 'OrgUnit',
+        });
+        entity.hasMany(models.UserWorkplaces, {
+            foreignKey: 'userId',
+            as: 'UserWorkplaces',
+        });
+        entity.hasMany(models.UserOrgRoles, {
+            foreignKey: 'userId',
+            as: 'UserOrgRoles',
+        });
     };
 
 
     entity.entity = async (where = null, eager = false) => {
-        let include = [];
-
-        if(eager) {
-            // include = [
-            //     {
-            //         model: entity.associations.Organization.target, // Access the target model via associations
-            //         as: 'Organization',
-            //     }
-            // ];
-        }
+        const { UsersGroups } = sequelize.models;
         return entity.findOne({
-            include: (eager ? include : null),
+            include: eager ? [
+                { model: UsersGroups, as: 'UsersGroups' },
+            ] : undefined,
             where: where,
         });
     };

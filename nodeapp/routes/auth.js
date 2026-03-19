@@ -3,7 +3,7 @@
 
 let express = require('express');
 const routesUtils = require("../utils/RoutesUtils");
-const {getRoleByEmail} = require("../utils/UserUtils");
+const {getRoleByEmail, autoAssignOrgRolesByEmail} = require("../utils/UserUtils");
 let router = express.Router();
 
 router.post('/login', async (req, res) => {
@@ -43,6 +43,7 @@ router.post('/login', async (req, res) => {
                 name: userInfo['full_name']
             });
         }
+        await autoAssignOrgRolesByEmail(user.id, user.email);
 
         const expiresInSeconds = tokenResponse.expires_in;
         const expiresAt = Date.now() + (expiresInSeconds * 1000);

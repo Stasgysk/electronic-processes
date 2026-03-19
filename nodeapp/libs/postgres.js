@@ -140,6 +140,18 @@ initDatabase().then(r => {
         });
     }
 
+    if (process.env.ORG_ROOT_NAME) {
+        db.OrgUnits.entity({ parentId: null, name: process.env.ORG_ROOT_NAME }).then(r => {
+            if (!r) {
+                db.OrgUnits.create({
+                    name: process.env.ORG_ROOT_NAME,
+                    type: process.env.ORG_ROOT_TYPE || null,
+                    parentId: null,
+                });
+            }
+        });
+    }
+
     const filePath = path.join(__dirname, '..', 'workflows', 'processWorkflowTemplate.json');
     let processWorkflowTemplateFile = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 

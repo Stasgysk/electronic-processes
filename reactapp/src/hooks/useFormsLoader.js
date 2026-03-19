@@ -12,11 +12,11 @@ export function useFormsLoader(user, fetchFunction, t, refreshKey) {
     }, [fetchFunction]);
 
     useEffect(() => {
-        if (!user?.userGroupId) return;
+        if (!user) return;
 
         const fetchForms = async () => {
             try {
-                const res = await fetchFunction(user.userGroupId);
+                const res = await fetchFunction();
                 setForms(res.data || []);
                 setLoaded(true);
             } catch (err) {
@@ -26,7 +26,7 @@ export function useFormsLoader(user, fetchFunction, t, refreshKey) {
         };
 
         fetchForms();
-    }, [user?.userGroupId, t, refreshKey]);
+    }, [user?.id, t, refreshKey]);
 
     return { forms, loaded, loadingError };
 }

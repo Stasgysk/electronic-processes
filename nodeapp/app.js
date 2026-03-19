@@ -16,6 +16,10 @@ let formsInstancesRouter = require('./routes/formsInstances');
 let processesRouter = require('./routes/processes');
 let processesInstancesRouter = require('./routes/processesInstances');
 let n8nRouter = require('./routes/n8n');
+let orgUnitsRouter = require('./routes/orgUnits');
+let orgRolesRouter = require('./routes/orgRoles');
+let userOrgRolesRouter = require('./routes/userOrgRoles');
+let userWorkplacesRouter = require('./routes/userWorkplaces');
 const fs = require("fs");
 let logger = require('./utils/Logger');
 let resBuilder = require('./utils/ResponseBuilder');
@@ -68,7 +72,7 @@ function logResponse(req, res, next) {
 const corsOptions = {
     origin: 'http://localhost:3000',
     credentials: true,
-    methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+    methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
     allowedHeaders: ['Content-Type','Authorization','x-csrf-token'],
     optionsSuccessStatus: 200
 };
@@ -97,6 +101,10 @@ app.use('/formsInstances', formsInstancesRouter);
 app.use('/processes', processesRouter);
 app.use('/processesInstances', processesInstancesRouter);
 app.use('/n8n', n8nRouter);
+app.use('/orgUnits', orgUnitsRouter);
+app.use('/orgRoles', orgRolesRouter);
+app.use('/userOrgRoles', userOrgRolesRouter);
+app.use('/userWorkplaces', userWorkplacesRouter);
 
 app.use(function(req, res, next) {
     next(createError(404));

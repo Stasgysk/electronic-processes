@@ -4,9 +4,8 @@ import "./i18n";
 import Header from "./components/Header";
 import { AuthProvider } from "./contexts/AuthContext";
 import { UserProvider, useUser } from "./contexts/UserContext";
-import GroupSelector from "./components/GroupSelector";
+import OnboardingModal from "./components/OnboardingModal";
 import AvailableForms from "./components/AvailableForms";
-import Forms from "./components/Forms";
 import {BrowserRouter as Router, Routes, Route, useLocation} from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { getAvailableForms } from "./api/forms.service";
@@ -15,6 +14,10 @@ import AwaitingForms from "./components/AwaitingForms";
 import FilledForms from "./components/FilledForms";
 import {getAwaitingForms} from "./api/formsInstances.service";
 import {getFilledProcessesAndFormsInstances} from "./api/processesInstances.service";
+import AdminPage from "./pages/AdminPage";
+import ProfilePage from "./pages/ProfilePage";
+import FormsPage from "./pages/FormsPage";
+import LandingPage from "./pages/LandingPage";
 
 function AppContent() {
     const location = useLocation();
@@ -59,15 +62,26 @@ function AppContent() {
         }));
     };
 
-    if (loading) return <p>Loading...</p>;
+    if (loading) return <p style={{ padding: '2rem', textAlign: 'center' }}>{t('loading')}...</p>;
     if (error) return <p>Error: {error.message}</p>;
 
     const updateCurrentUser = (user) => updateUser(user);
 
+    if (!user) {
+        return (
+            <>
+                <Header />
+                <Routes>
+                    <Route path="*" element={<LandingPage />} />
+                </Routes>
+            </>
+        );
+    }
+
     return (
         <>
-            {user && user?.userGroupId === 0 && (
-                <GroupSelector user={user} updateUser={updateCurrentUser} />
+            {user && (user.userGroupId === 0 || (user.UsersGroups?.name === 'STUDENT' && !user.orgUnitId)) && (
+                <OnboardingModal user={user} updateUser={updateCurrentUser} />
             )}
             <Header />
             <main className="App-main">
@@ -137,7 +151,9 @@ function AppContent() {
                             </>
                         }
                     />
-                    <Route path="/form/:id" element={<Forms />} />
+                    <Route path="/form/:id" element={<FormsPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/admin" element={<AdminPage />} />
                 </Routes>
             </main>
         </>
