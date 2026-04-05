@@ -3,6 +3,7 @@
 
 let express = require('express');
 let router = express.Router();
+const formsInstancesRouter = require('./formsInstances');
 
 /* GET current user's role assignments (with OrgRole + OrgUnit) */
 router.get('/me', async function (req, res) {
@@ -51,16 +52,26 @@ router.post('/', async function (req, res) {
         const { userId, orgRoleId } = req.body;
         if (!userId || !orgRoleId) return res.status(400).json(resBuilder.fail("userId and orgRoleId are required"));
 
+        const currentSemester = await postgres.Semesters.entity({ isCurrent: true });
+        const semesterId = currentSemester ? currentSemester.id : null;
+
         const existing = await postgres.UserOrgRoles.entity({
             userId: parseInt(userId),
             orgRoleId: parseInt(orgRoleId),
+            semesterId: semesterId,
         });
         if (existing) return res.status(200).json(resBuilder.success(existing));
 
         const assignment = await postgres.UserOrgRoles.create({
             userId: parseInt(userId),
             orgRoleId: parseInt(orgRoleId),
+            semesterId: semesterId,
+            validFrom: currentSemester?.startDate || null,
+            validTo: currentSemester?.endDate || null,
         });
+
+        triggerReResolveForRole(orgRoleId).catch(e => logger.error('re-resolve after assign failed:', e));
+
         return res.status(200).json(resBuilder.success(assignment));
     } catch (e) {
         logger.error(e);
@@ -80,16 +91,44 @@ router.post('/join', async function (req, res) {
             return res.status(403).json(resBuilder.fail("Invalid access code"));
         }
 
-        const existing = await postgres.UserOrgRoles.entity({ userId: req.userId, orgRoleId: parseInt(orgRoleId) });
+        const currentSemester = await postgres.Semesters.entity({ isCurrent: true });
+        const semesterId = currentSemester ? currentSemester.id : null;
+
+        const existing = await postgres.UserOrgRoles.entity({ userId: req.userId, orgRoleId: parseInt(orgRoleId), semesterId });
         if (existing) return res.status(200).json(resBuilder.success(existing));
 
-        const assignment = await postgres.UserOrgRoles.create({ userId: req.userId, orgRoleId: parseInt(orgRoleId) });
+        const assignment = await postgres.UserOrgRoles.create({
+            userId: req.userId,
+            orgRoleId: parseInt(orgRoleId),
+            semesterId,
+            validFrom: currentSemester?.startDate || null,
+            validTo: currentSemester?.endDate || null,
+        });
+
+        triggerReResolveForRole(orgRoleId).catch(e => logger.error('re-resolve after join failed:', e));
+
         return res.status(200).json(resBuilder.success(assignment));
     } catch (e) {
         logger.error(e);
         return res.status(500).json(resBuilder.error("Something went wrong while joining role"));
     }
 });
+
+async function triggerReResolveForRole(orgRoleId) {
+    const role = await postgres.OrgRoles.entity({ id: parseInt(orgRoleId) });
+    if (!role || !role.name) return;
+
+    const stuckIds = await formsInstancesRouter.findStuckProcessInstancesForRole(role.name);
+    if (stuckIds.length === 0) return;
+
+    logger.info(`Re-resolving ${stuckIds.length} stuck process instance(s) for role "${role.name}"`);
+    for (const processInstanceId of stuckIds) {
+        const result = await formsInstancesRouter.reResolveProcessInstance(processInstanceId);
+        if (result.created > 0) {
+            logger.info(`Re-resolve: created ${result.created} form instance(s) for processInstance ${processInstanceId}`);
+        }
+    }
+}
 
 /* DELETE assignment */
 router.delete('/:id', async function (req, res) {

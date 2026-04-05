@@ -34,7 +34,7 @@ export function renderFormGroups(form, formValues, handleChange, t, readOnly = f
 
                                         {["string", "number", "date"].includes(field.type) && (
                                             <>
-                                                <Form.Label column={}>{field.name}</Form.Label>
+                                                <Form.Label>{field.name}</Form.Label>
                                                 <Form.Control
                                                     type={field.type}
                                                     value={groupValue?.[key]?.value ?? field.value ?? ""}
@@ -52,7 +52,7 @@ export function renderFormGroups(form, formValues, handleChange, t, readOnly = f
 
                                         {field.type === "boolean" && (
                                             <>
-                                                <Form.Label column={}>{field.name}</Form.Label>
+                                                <Form.Label>{field.name}</Form.Label>
                                                 <Form.Select
                                                     value={
                                                         field.value === true || field.value === false ? field.value :
@@ -76,7 +76,7 @@ export function renderFormGroups(form, formValues, handleChange, t, readOnly = f
 
                                         {field.type === "checkbox" && (
                                             <>
-                                                <Form.Label column={}>{field.name}</Form.Label>
+                                                <Form.Label>{field.name}</Form.Label>
                                                 <div className="checkbox-wrapper">
                                                     <Form.Check
                                                         type="checkbox"
@@ -94,7 +94,7 @@ export function renderFormGroups(form, formValues, handleChange, t, readOnly = f
                                             <>
                                                 {!readOnly && (
                                                     <>
-                                                        <Form.Label column={}>{field.name}</Form.Label>
+                                                        <Form.Label>{field.name}</Form.Label>
                                                             <Form.Control
                                                                 type="file"
                                                                 isInvalid={!!groupValue?.[key]?.error}
@@ -111,7 +111,7 @@ export function renderFormGroups(form, formValues, handleChange, t, readOnly = f
 
                                                 {readOnly && field.value && (
                                                     <>
-                                                        <Form.Label column={}>{field.name}</Form.Label>
+                                                        <Form.Label>{field.name}</Form.Label>
 
                                                         <Button
                                                             className="form-control"

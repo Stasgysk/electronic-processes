@@ -2,7 +2,7 @@ import {useEffect, useState} from "react";
 import "./App.css";
 import "./i18n";
 import Header from "./components/Header";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { UserProvider, useUser } from "./contexts/UserContext";
 import OnboardingModal from "./components/OnboardingModal";
 import AvailableForms from "./components/AvailableForms";
@@ -22,12 +22,9 @@ import LandingPage from "./pages/LandingPage";
 function AppContent() {
     const location = useLocation();
     const { t } = useTranslation();
+    const { authLoading } = useAuth();
     const { user, loading, error, updateUser } = useUser();
-    const [openSection, setOpenSection] = useState({
-        available: true,
-        second: true,
-        filled: false,
-    });
+    const [activeHomeTab, setActiveHomeTab] = useState('available');
 
     const [refreshKey, setRefreshKey] = useState(0);
 
@@ -55,26 +52,16 @@ function AppContent() {
         loadingError: filledFormsLoadingError,
     } = useFormsLoader(user, getFilledProcessesAndFormsInstances, t, refreshKey);
 
-    const toggleSection = (section) => {
-        setOpenSection((prev) => ({
-            ...prev,
-            [section]: !prev[section],
-        }));
-    };
-
-    if (loading) return <p style={{ padding: '2rem', textAlign: 'center' }}>{t('loading')}...</p>;
+    if (authLoading || loading) return null;
     if (error) return <p>Error: {error.message}</p>;
 
     const updateCurrentUser = (user) => updateUser(user);
 
     if (!user) {
         return (
-            <>
-                <Header />
-                <Routes>
-                    <Route path="*" element={<LandingPage />} />
-                </Routes>
-            </>
+            <Routes>
+                <Route path="*" element={<LandingPage />} />
+            </Routes>
         );
     }
 
@@ -87,68 +74,35 @@ function AppContent() {
             <main className="App-main">
                 <Routes>
                     <Route path="/" element={
-                            <>
-                                <div className="main-section">
-                                    <h2
-                                        className="section-header"
-                                        onClick={() => toggleSection("available")}
-                                    >
-                                        {t("availableForms")}
-                                        <span className="arrow">
-                                            {openSection.available ? "▲" : "▼"}
-                                        </span>
-                                    </h2>
-                                    {openSection.available && (
-                                        <div className="table-wrapper">
-                                            <AvailableForms
-                                                forms={availableForms}
-                                                loading={!availableFormsLoaded}
-                                                error={availableFormsLoadingError}
-                                            />
-                                        </div>
+                            <div className="home-page">
+                                <nav className="home-tabs">
+                                    <button className={`home-tab${activeHomeTab === 'available' ? ' active' : ''}`} onClick={() => setActiveHomeTab('available')}>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                        {t('availableForms')}
+                                    </button>
+                                    <button className={`home-tab${activeHomeTab === 'awaiting' ? ' active' : ''}`} onClick={() => setActiveHomeTab('awaiting')}>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        {t('formsAwaitingActions')}
+                                        {awaitingForms.length > 0 && <span className="home-tab-badge">{awaitingForms.length}</span>}
+                                    </button>
+                                    <button className={`home-tab${activeHomeTab === 'filled' ? ' active' : ''}`} onClick={() => setActiveHomeTab('filled')}>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                        {t('filledForms')}
+                                    </button>
+                                </nav>
+
+                                <div className="home-tab-content" key={activeHomeTab}>
+                                    {activeHomeTab === 'available' && (
+                                        <AvailableForms forms={availableForms} loading={!availableFormsLoaded} error={availableFormsLoadingError} />
+                                    )}
+                                    {activeHomeTab === 'awaiting' && (
+                                        <AwaitingForms forms={awaitingForms} loading={!awaitingFormsLoaded} error={awaitingFormsLoadingError} />
+                                    )}
+                                    {activeHomeTab === 'filled' && (
+                                        <FilledForms forms={filledForms} loading={!filledFormsLoaded} error={filledFormsLoadingError} />
                                     )}
                                 </div>
-                                <div className="main-section">
-                                    <h2
-                                        className="section-header"
-                                        onClick={() => toggleSection("second")}
-                                    >
-                                        {t("formsAwaitingActions")}
-                                        <span className="arrow">
-                                            {openSection.second ? "▲" : "▼"}
-                                        </span>
-                                    </h2>
-                                    {openSection.second && (
-                                        <div className="table-wrapper">
-                                            <AwaitingForms
-                                                forms={awaitingForms}
-                                                loading={!awaitingFormsLoaded}
-                                                error={awaitingFormsLoadingError}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="main-section">
-                                    <h2
-                                        className="section-header"
-                                        onClick={() => toggleSection("filled")}
-                                    >
-                                        {t("filledForms")}
-                                        <span className="arrow">
-                                            {openSection.filled ? "▲" : "▼"}
-                                        </span>
-                                    </h2>
-                                    {openSection.filled && (
-                                        <div className="table-wrapper">
-                                            <FilledForms
-                                                forms={filledForms}
-                                                loading={!filledFormsLoaded}
-                                                error={filledFormsLoadingError}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            </>
+                            </div>
                         }
                     />
                     <Route path="/form/:id" element={<FormsPage />} />

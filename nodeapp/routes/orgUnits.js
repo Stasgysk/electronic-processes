@@ -164,11 +164,12 @@ router.put('/:id', async function (req, res) {
         const unit = await postgres.OrgUnits.entity({ id: req.params.id });
         if (!unit) return res.status(400).json(resBuilder.fail("Org unit not found"));
 
-        const { name, type, parentId, studentPickable } = req.body;
+        const { name, type, parentId, studentPickable, sortOrder } = req.body;
         if (name !== undefined) unit.name = name;
         if (type !== undefined) unit.type = type;
         if (parentId !== undefined) unit.parentId = parentId ? parseInt(parentId) : null;
         if (studentPickable !== undefined) unit.studentPickable = studentPickable;
+        if (sortOrder !== undefined) unit.sortOrder = sortOrder !== null ? parseInt(sortOrder) : null;
         await unit.save();
         return res.status(200).json(resBuilder.success(unit));
     } catch (e) {
@@ -207,6 +208,7 @@ async function cloneUnitRecursive(sourceId, name, type, parentId, allUnits, allR
             orgUnitId: newUnit.id,
             emailPattern: role.emailPattern || null,
             accessCode: role.accessCode || null,
+            isStudentRole: role.isStudentRole || false,
         });
     }
 

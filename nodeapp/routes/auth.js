@@ -43,7 +43,7 @@ router.post('/login', async (req, res) => {
                 name: userInfo['full_name']
             });
         }
-        await autoAssignOrgRolesByEmail(user.id, user.email);
+        autoAssignOrgRolesByEmail(user.id, user.email).catch(e => logger.error(e));
 
         const expiresInSeconds = tokenResponse.expires_in;
         const expiresAt = Date.now() + (expiresInSeconds * 1000);

@@ -62,7 +62,7 @@ router.put('/', async function (req, res, next) {
         await user.save();
 
         if (newOrgUnitId) {
-            await reassignOrgRolesByEmailAndUnit(user.id, user.email, newOrgUnitId);
+            reassignOrgRolesByEmailAndUnit(user.id, user.email, newOrgUnitId).catch(e => logger.error(e));
         }
 
         const updatedUser = await postgres.Users.entity({ id: req.userId }, true);

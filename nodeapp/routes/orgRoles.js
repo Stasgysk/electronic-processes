@@ -43,7 +43,7 @@ router.get('/', async function (req, res) {
 /* POST create role */
 router.post('/', async function (req, res) {
     try {
-        const { name, orgUnitId, emailPattern, accessCode } = req.body;
+        const { name, orgUnitId, emailPattern, accessCode, isStudentRole, sortOrder } = req.body;
         if (!name || !orgUnitId) return res.status(400).json(resBuilder.fail("name and orgUnitId are required"));
 
         const role = await postgres.OrgRoles.create({
@@ -51,6 +51,8 @@ router.post('/', async function (req, res) {
             orgUnitId: parseInt(orgUnitId),
             emailPattern: emailPattern || null,
             accessCode: accessCode || null,
+            isStudentRole: !!isStudentRole,
+            sortOrder: sortOrder != null ? parseInt(sortOrder) : null,
         });
 
         if (emailPattern) {
@@ -70,10 +72,12 @@ router.patch('/:id', async function (req, res) {
         const role = await postgres.OrgRoles.entity({ id: req.params.id });
         if (!role) return res.status(400).json(resBuilder.fail("Org role not found"));
 
-        const { name, emailPattern, accessCode } = req.body;
+        const { name, emailPattern, accessCode, isStudentRole, sortOrder } = req.body;
         if (name !== undefined) role.name = name;
         if (emailPattern !== undefined) role.emailPattern = emailPattern || null;
         if (accessCode !== undefined) role.accessCode = accessCode || null;
+        if (isStudentRole !== undefined) role.isStudentRole = !!isStudentRole;
+        if (sortOrder !== undefined) role.sortOrder = sortOrder != null ? parseInt(sortOrder) : null;
         await role.save();
 
         if (emailPattern) {
@@ -101,12 +105,20 @@ router.delete('/:id', async function (req, res) {
 });
 
 async function autoAssignByPattern(orgRoleId, emailPattern) {
+    const currentSemester = await postgres.Semesters.entity({ isCurrent: true });
+    const semesterId = currentSemester ? currentSemester.id : null;
     const allUsers = await postgres.Users.findAll({ limit: 5000 });
     for (const user of allUsers) {
         if (user.email && user.email.includes(emailPattern)) {
-            const existing = await postgres.UserOrgRoles.entity({ userId: user.id, orgRoleId });
+            const existing = await postgres.UserOrgRoles.entity({ userId: user.id, orgRoleId, semesterId });
             if (!existing) {
-                await postgres.UserOrgRoles.create({ userId: user.id, orgRoleId });
+                await postgres.UserOrgRoles.create({
+                    userId: user.id,
+                    orgRoleId,
+                    semesterId,
+                    validFrom: currentSemester?.startDate || null,
+                    validTo: currentSemester?.endDate || null,
+                });
             }
         }
     }

@@ -22,6 +22,15 @@ module.exports = (sequelize, DataTypes, name) => {
             type: DataTypes.TEXT,
             allowNull: true,
         },
+        isStudentRole: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: false,
+        },
+        sortOrder: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+        },
     }, {
         tableName: "org_roles",
         underscored: true,

@@ -24,27 +24,29 @@ export default function AwaitingForms(props) {
     return (
         <div className="available-forms">
             {props.forms.length === 0 ? (
-                <p>{t("noAvailableForms")}</p>
+                <p className="forms-empty">{t("noAvailableForms")}</p>
             ) : (
-                <div className="table-wrapper">
-                    <table className="forms-table">
-                        <thead>
-                        <tr>
-                            <th>{t("formName")}</th>
-                            <th>{t("initialUserName")}</th>
-                            <th>{t("createdAt")}</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {props.forms.map((form) => (
-                            <tr key={form.id} onClick={() => navigate(`/form/${form.id}?processInstanceId=${form.processInstanceId}&type=instance`, { state: { form } })} style={{ cursor: "pointer" }}>
-                                <td>{form.name}</td>
-                                <td>{form.initialUserName}</td>
-                                <td>{new Date(form.createdAt).toLocaleDateString()}</td>
+                <div className="forms-list-card">
+                    <div className="table-wrapper">
+                        <table className="forms-table">
+                            <thead>
+                            <tr>
+                                <th>{t("formName")}</th>
+                                <th>{t("initialUserName")}</th>
+                                <th>{t("createdAt")}</th>
                             </tr>
-                        ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                            {props.forms.map((form) => (
+                                <tr key={form.id} onClick={() => navigate(`/form/${form.id}?processInstanceId=${form.processInstanceId}&type=instance`, { state: { form } })} style={{ cursor: "pointer" }}>
+                                    <td>{form.name}</td>
+                                    <td>{form.initialUserName}</td>
+                                    <td>{new Date(form.createdAt).toLocaleDateString()}</td>
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
         </div>

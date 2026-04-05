@@ -1,10 +1,82 @@
 import './OnboardingModal.css';
 import { useState, useEffect } from 'react';
-import { Form, Button, Spinner, Badge } from 'react-bootstrap';
+import { Form, Button, Spinner } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 import { getOrgUnitsFlat } from '../api/orgUnits.service';
 import { addWorkplace } from '../api/userWorkplaces.service';
 import gsAxios from '../api/gsAxios';
+
+function CascadingUnitPicker({ flatUnits, onSelect }) {
+    const { t } = useTranslation();
+    const [path, setPath] = useState([]);
+
+    const getOptions = (depth) => {
+        if (depth === 0) {
+            const root = flatUnits.find(u => u.parentId === null);
+            if (root) return flatUnits.filter(u => u.parentId === root.id);
+            return flatUnits.filter(u => u.parentId === null);
+        }
+        const parentId = path[depth - 1];
+        if (!parentId) return [];
+        return flatUnits.filter(u => u.parentId === parentId);
+    };
+
+    const handleSelect = (depth, value) => {
+        const unitId = value ? parseInt(value) : null;
+        const newPath = path.slice(0, depth);
+        if (unitId) newPath.push(unitId);
+        setPath(newPath);
+
+        const finalUnit = unitId ? flatUnits.find(u => u.id === unitId) : null;
+        const children = unitId ? flatUnits.filter(u => u.parentId === unitId) : [];
+        onSelect(finalUnit?.studentPickable && children.length === 0 ? unitId : null);
+    };
+
+    const steps = [];
+    for (let d = 0; ; d++) {
+        const opts = getOptions(d);
+        if (opts.length === 0) break;
+        steps.push({ depth: d, options: opts });
+        if (!path[d]) break;
+    }
+
+    const finalId = path[path.length - 1];
+    const finalUnit = finalId ? flatUnits.find(u => u.id === finalId) : null;
+    const hasChildren = finalUnit ? flatUnits.some(u => u.parentId === finalUnit.id) : false;
+    const isPickable = finalUnit?.studentPickable && !hasChildren;
+
+    return (
+        <div className="cascading-picker">
+            {steps.map(({ depth, options }) => (
+                <Form.Group key={depth} className="mb-2">
+                    <Form.Select
+                        value={path[depth] || ''}
+                        onChange={e => handleSelect(depth, e.target.value)}
+                    >
+                        <option value="">{t('onboarding.selectUnit')}</option>
+                        {options.map(u => (
+                            <option key={u.id} value={u.id}>
+                                {u.name}{u.type ? ` (${u.type})` : ''}
+                            </option>
+                        ))}
+                    </Form.Select>
+                </Form.Group>
+            ))}
+
+            {finalUnit && hasChildren && (
+                <p className="onboarding-hint">{t('onboarding.selectDeeper')}</p>
+            )}
+            {finalUnit && !hasChildren && !finalUnit.studentPickable && (
+                <p className="onboarding-hint onboarding-hint-warn">{t('onboarding.notPickable')}</p>
+            )}
+            {isPickable && (
+                <div className="onboarding-selected-unit">
+                    ✓ {finalUnit.name}
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function OnboardingModal({ user, updateUser }) {
     const { t } = useTranslation();
@@ -14,7 +86,7 @@ export default function OnboardingModal({ user, updateUser }) {
     const [flatUnits, setFlatUnits] = useState([]);
     const [loadingUnits, setLoadingUnits] = useState(true);
 
-    const [selectedFaculty, setSelectedFaculty] = useState('');
+    const [selectedUnitId, setSelectedUnitId] = useState(null);
     const [selectedWorkplaces, setSelectedWorkplaces] = useState([]);
     const [adminCode, setAdminCode] = useState('');
     const [wantsAdmin, setWantsAdmin] = useState(false);
@@ -23,13 +95,10 @@ export default function OnboardingModal({ user, updateUser }) {
 
     useEffect(() => {
         getOrgUnitsFlat()
-            .then(res => {
-                const all = res.data || [];
-                setFlatUnits(isStudent ? all.filter(u => u.studentPickable) : all);
-            })
+            .then(res => setFlatUnits(res.data || []))
             .catch(() => setFlatUnits([]))
             .finally(() => setLoadingUnits(false));
-    }, [isStudent]);
+    }, []);
 
     const toggleWorkplace = (unitId) => {
         setSelectedWorkplaces(prev =>
@@ -40,14 +109,14 @@ export default function OnboardingModal({ user, updateUser }) {
     const handleSubmit = async () => {
         setError('');
         if (isStudent) {
-            if (!selectedFaculty) { setError(t('onboarding.pickFacultyError')); return; }
+            if (!selectedUnitId) { setError(t('onboarding.pickOrgUnitError')); return; }
         } else {
             if (!wantsAdmin && selectedWorkplaces.length === 0) { setError(t('onboarding.pickWorkplacesError')); return; }
         }
         setSaving(true);
         try {
             if (isStudent) {
-                const res = await gsAxios.put('/users', { orgUnitId: parseInt(selectedFaculty) }, { withCredentials: true });
+                const res = await gsAxios.put('/users', { orgUnitId: selectedUnitId }, { withCredentials: true });
                 updateUser(res.data.data);
             } else {
                 const groupRes = await gsAxios.get('/usersGroups', { withCredentials: true });
@@ -82,7 +151,7 @@ export default function OnboardingModal({ user, updateUser }) {
                     {isStudent ? t('onboarding.welcomeStudent') : t('onboarding.welcomeEmployee')}
                 </h3>
                 <p className="onboarding-subtitle">
-                    {isStudent ? t('onboarding.pickFacultyHint') : t('onboarding.pickWorkplacesHint')}
+                    {isStudent ? t('onboarding.pickOrgUnitHint') : t('onboarding.pickWorkplacesHint')}
                 </p>
 
                 {error && <div className="onboarding-error">{error}</div>}
@@ -90,19 +159,11 @@ export default function OnboardingModal({ user, updateUser }) {
                 {loadingUnits ? (
                     <div className="onboarding-loading"><Spinner /></div>
                 ) : isStudent ? (
-                    <Form.Group>
-                        <Form.Label column={}>{t('onboarding.faculty')}</Form.Label>
-                        <Form.Select value={selectedFaculty} onChange={e => setSelectedFaculty(e.target.value)}>
-                            <option value="">{t('onboarding.selectFaculty')}</option>
-                            {flatUnits.map(u => (
-                                <option key={u.id} value={u.id}>{u.name}{u.type ? ` (${u.type})` : ''}</option>
-                            ))}
-                        </Form.Select>
-                    </Form.Group>
+                    <CascadingUnitPicker flatUnits={flatUnits} onSelect={setSelectedUnitId} />
                 ) : (
                     <>
                         <Form.Group className="mb-3">
-                            <Form.Label column={}>{t('onboarding.workplaces')}</Form.Label>
+                            <Form.Label>{t('onboarding.workplaces')}</Form.Label>
                             <div className="onboarding-chips-list">
                                 {flatUnits.map(u => {
                                     const selected = selectedWorkplaces.includes(u.id);
@@ -147,12 +208,11 @@ export default function OnboardingModal({ user, updateUser }) {
                     </>
                 )}
 
-
                 <Button
                     className="onboarding-submit"
                     variant="primary"
                     onClick={handleSubmit}
-                    disabled={saving}
+                    disabled={saving || (isStudent && !selectedUnitId)}
                 >
                     {saving ? <Spinner size="sm" /> : t('onboarding.confirm')}
                 </Button>

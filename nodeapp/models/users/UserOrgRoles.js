@@ -14,6 +14,18 @@ module.exports = (sequelize, DataTypes, name) => {
             type: DataTypes.INTEGER,
             allowNull: false,
         },
+        semesterId: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+        },
+        validFrom: {
+            type: DataTypes.DATEONLY,
+            allowNull: true,
+        },
+        validTo: {
+            type: DataTypes.DATEONLY,
+            allowNull: true,
+        },
     }, {
         tableName: "user_org_roles",
         underscored: true,
@@ -22,6 +34,7 @@ module.exports = (sequelize, DataTypes, name) => {
         indexes: [
             { fields: ['user_id'] },
             { fields: ['org_role_id'] },
+            { fields: ['semester_id'] },
         ],
     });
 
@@ -33,6 +46,10 @@ module.exports = (sequelize, DataTypes, name) => {
         entity.belongsTo(models.OrgRoles, {
             foreignKey: 'orgRoleId',
             as: 'OrgRole',
+        });
+        entity.belongsTo(models.Semesters, {
+            foreignKey: 'semesterId',
+            as: 'Semester',
         });
     };
 

@@ -6,44 +6,91 @@
 
 .App-main {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2rem;
-    padding: 2rem;
-    background-color: #f9fafb;
+    background-color: #f5f6f8;
     min-height: 80vh;
 }
 
-.main-section {
-    width: 100%;
+/* ── Home page ───────────────────────────────────────────────────────────── */
+.home-page {
     max-width: 1000px;
-    background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
-    padding: 1.5rem 2rem;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    margin: 0 auto;
+    padding: 1.5rem 1.5rem 3rem;
 }
 
-.main-section:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+.home-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #e0e4ea;
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.home-tabs::-webkit-scrollbar { display: none; }
+
+.home-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.93rem;
+    font-weight: 500;
+    color: #666;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+    position: relative;
 }
 
-.main-section h2 {
-    font-size: 1.4rem;
-    margin-bottom: 1rem;
-    color: #1e293b;
-    border-bottom: 2px solid #3b82f6;
-    padding-bottom: 0.4rem;
+.home-tab svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
 }
 
+.home-tab:hover { color: #333; }
+
+.home-tab.active {
+    color: #1a73e8;
+    border-bottom-color: #1a73e8;
+    font-weight: 600;
+}
+
+.home-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: #1a73e8;
+    color: #fff;
+    border-radius: 9px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.home-tab-content {
+    animation: tabFadeIn 0.18s ease;
+}
+
+@keyframes tabFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Shared table wrapper ────────────────────────────────────────────────── */
 .table-wrapper {
     overflow-x: auto;
-    max-height: 60vh;
 }
 
-.table-wrapper table {
+.table-wrapper table,
+.forms-table {
     width: 100%;
     border-collapse: collapse;
 }
@@ -51,73 +98,65 @@
 .table-wrapper th,
 .table-wrapper td {
     text-align: left;
-    padding: 0.75rem;
-    border-bottom: 1px solid #e5e7eb;
-}
-
-.table-wrapper th:last-child,
-.table-wrapper td:last-child {
-    text-align: right;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f0f2f5;
+    font-size: 0.92rem;
 }
 
 .table-wrapper th {
-    background-color: #f1f5f9;
-    color: #334155;
+    background: #fafbfc;
+    color: #555;
     font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid #e0e4ea;
 }
 
-.table-wrapper tr:hover {
-    background-color: #f9fafb;
+.table-wrapper tr:hover td {
+    background: #f8faff;
 }
 
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    user-select: none;
-    font-size: 1.3rem;
-    color: #1e293b;
-    border-bottom: 2px solid #3b82f6;
-    padding-bottom: 0.4rem;
-    transition: color 0.2s ease;
-}
-
-.section-header:hover {
-    color: #2563eb;
-}
-
-.arrow {
-    font-size: 1rem;
-    transition: transform 0.2s ease;
-}
-
-.table-wrapper[hidden] {
-    max-height: 0;
-    opacity: 0;
+/* ── Forms list card ─────────────────────────────────────────────────────── */
+.forms-list-card {
+    background: #fff;
+    border: 1px solid #e0e4ea;
+    border-radius: 12px;
     overflow: hidden;
 }
 
-/* Responsive: mobile (≤ 640px) */
+.forms-empty {
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: #aaa;
+    font-size: 0.93rem;
+}
+
+/* ── Responsive: mobile (≤ 640px) ──────────────────────────────────────── */
 @media (max-width: 640px) {
-    .App-main {
-        padding: 1rem;
-        gap: 1rem;
+    .home-page {
+        padding: 0 0 2rem;
     }
 
-    .main-section {
-        padding: 1rem;
-        border-radius: 12px;
+    .home-tabs {
+        margin-bottom: 1rem;
+        padding: 0 0.5rem;
     }
 
-    .main-section h2,
-    .section-header {
-        font-size: 1.1rem;
+    .home-tab {
+        padding: 0.7rem 0.9rem;
+        font-size: 0.85rem;
+        gap: 0.3rem;
+    }
+
+    .home-tab svg {
+        width: 14px;
+        height: 14px;
     }
 
     .table-wrapper th,
     .table-wrapper td {
-        padding: 0.5rem 0.4rem;
+        padding: 0.6rem 0.75rem;
         font-size: 0.85rem;
     }
 }

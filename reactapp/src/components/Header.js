@@ -67,7 +67,7 @@ export default function Header() {
                                 checked={radioValue === radio.value}
                                 size="sm"
                                 onChange={(e) => setRadioValue(e.currentTarget.value)}
-                                onClick={() => i18n.changeLanguage(radio.languageCode)}
+                                onClick={() => { i18n.changeLanguage(radio.languageCode); localStorage.setItem('lang', radio.languageCode); }}
                             >
                                 {radio.name}
                             </ToggleButton>
@@ -113,6 +113,7 @@ export default function Header() {
                             onClick={() => {
                                 setRadioValue(radio.value);
                                 i18n.changeLanguage(radio.languageCode);
+                                localStorage.setItem('lang', radio.languageCode);
                             }}
                         >
                             {radio.name}

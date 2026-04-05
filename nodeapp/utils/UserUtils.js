@@ -54,6 +54,16 @@ async function reassignOrgRolesByEmailAndUnit(userId, email, newOrgUnitId) {
             if (!existing) await postgres.UserOrgRoles.create({ userId, orgRoleId: role.id });
         }
     }
+
+    const studentRolesInUnit = allRoles.filter(r =>
+        r.isStudentRole &&
+        r.orgUnitId === newOrgUnitId &&
+        (!r.emailPattern || email.includes(r.emailPattern))
+    );
+    for (const role of studentRolesInUnit) {
+        const existing = await postgres.UserOrgRoles.entity({ userId, orgRoleId: role.id });
+        if (!existing) await postgres.UserOrgRoles.create({ userId, orgRoleId: role.id });
+    }
 }
 
 module.exports = {

@@ -20,6 +20,7 @@ let orgUnitsRouter = require('./routes/orgUnits');
 let orgRolesRouter = require('./routes/orgRoles');
 let userOrgRolesRouter = require('./routes/userOrgRoles');
 let userWorkplacesRouter = require('./routes/userWorkplaces');
+let semestersRouter = require('./routes/semesters');
 const fs = require("fs");
 let logger = require('./utils/Logger');
 let resBuilder = require('./utils/ResponseBuilder');
@@ -105,6 +106,7 @@ app.use('/orgUnits', orgUnitsRouter);
 app.use('/orgRoles', orgRolesRouter);
 app.use('/userOrgRoles', userOrgRolesRouter);
 app.use('/userWorkplaces', userWorkplacesRouter);
+app.use('/semesters', semestersRouter);
 
 app.use(function(req, res, next) {
     next(createError(404));

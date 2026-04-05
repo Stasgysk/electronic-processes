@@ -8,6 +8,7 @@ export const AuthProvider = ({ children }) => {
     const [accessToken, setAccessToken] = useState(null);
     const [csrfToken, setCsrfToken] = useState(null);
     const [expiresIn, setExpiresIn] = useState(null);
+    const [authLoading, setAuthLoading] = useState(true);
     const navigate = useNavigate();
 
     const didLoginRef = useRef(false);
@@ -51,7 +52,7 @@ export const AuthProvider = ({ children }) => {
             await loginWithCode(code).catch(err => console.error("Login failed", err));
         };
 
-        initAuth();
+        initAuth().finally(() => setAuthLoading(false));
     }, []);
 
     useEffect(() => {
@@ -103,7 +104,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ accessToken, csrfToken, loginWithCode, redirectToSSO, logoutUser }}>
+        <AuthContext.Provider value={{ accessToken, csrfToken, authLoading, loginWithCode, redirectToSSO, logoutUser }}>
             {children}
         </AuthContext.Provider>
     );

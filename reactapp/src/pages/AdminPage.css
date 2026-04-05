@@ -5,20 +5,6 @@
     height: calc(100vh - 64px);
     overflow: hidden;
     background: #f4f6f9;
-    /* Escape App-main's padding and centering */
-    align-self: stretch;
-    margin: -2rem -2rem 0;
-    width: calc(100% + 4rem);
-}
-
-@media (max-width: 640px) {
-    .admin-page {
-        margin: -1rem -1rem 0;
-        width: calc(100% + 2rem);
-        height: auto;
-        min-height: calc(100vh - 56px);
-        overflow: visible;
-    }
 }
 
 /* ── Top bar ────────────────────────────────────────────────────────────── */
@@ -46,7 +32,11 @@
     display: flex;
     gap: 0;
     align-self: stretch;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
 }
+.admin-tabs::-webkit-scrollbar { display: none; }
 
 .admin-tab {
     background: transparent;
@@ -57,8 +47,12 @@
     font-weight: 500;
     color: #666;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: color 0.15s, border-color 0.15s;
     white-space: nowrap;
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    margin-bottom: -1px;
 }
 
 .admin-tab:hover { color: #333; }
@@ -66,6 +60,7 @@
 .admin-tab.active {
     color: #0d6efd;
     border-bottom-color: #0d6efd;
+    font-weight: 600;
 }
 
 /* ── Split layout ────────────────────────────────────────────────────────── */
@@ -73,6 +68,12 @@
     display: flex;
     flex: 1;
     overflow: hidden;
+    animation: adminTabSlide 0.2s ease;
+}
+
+@keyframes adminTabSlide {
+    from { opacity: 0; transform: translateX(16px); }
+    to   { opacity: 1; transform: translateX(0); }
 }
 
 .admin-layout.single {
@@ -99,9 +100,9 @@
 
 /* ── Tree sidebar ────────────────────────────────────────────────────────── */
 .tree-sidebar {
-    width: 360px;
-    min-width: 280px;
-    max-width: 440px;
+    width: 460px;
+    min-width: 360px;
+    max-width: 560px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -264,6 +265,33 @@
     font-size: 1.2rem;
     font-weight: 700;
     margin: 0;
+}
+
+.unit-settings-section {
+    background: #f8f9fb;
+    border: 1px solid #e0e4ea;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.unit-settings-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.unit-settings-name {
+    flex: 1;
+    min-width: 0;
+}
+
+.unit-settings-order {
+    width: 80px;
+    flex-shrink: 0;
 }
 
 .add-role-bar {
@@ -619,6 +647,9 @@ select.uap-filter-input {
     font-size: 0.7rem;
     font-weight: 600;
     white-space: nowrap;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .uap-unit-chip.primary {
@@ -833,6 +864,12 @@ select.uap-filter-input {
     padding-right: 4px;
 }
 
+.uap-chip-unit {
+    font-size: 0.75rem;
+    color: #888;
+    font-weight: 400;
+}
+
 .uap-chip-rm {
     background: none;
     border: none;
@@ -945,7 +982,7 @@ select.uap-filter-input {
 @media (max-width: 640px) {
     .admin-page {
         height: auto;
-        min-height: calc(100vh - 64px);
+        min-height: calc(100vh - 56px);
         overflow: visible;
     }
 
@@ -956,11 +993,6 @@ select.uap-filter-input {
 
     .admin-topbar h3 {
         font-size: 1rem;
-    }
-
-    .admin-tab {
-        padding: 0 0.75rem;
-        font-size: 0.82rem;
     }
 
     .admin-layout {
@@ -1040,4 +1072,116 @@ select.uap-filter-input {
         padding: 8px 0.75rem 8px 8px;
         min-height: 44px;
     }
+}
+
+.semester-panel {
+    padding: 1.5rem;
+    overflow-y: auto;
+    max-height: 100%;
+}
+
+.semester-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.semester-create-form {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    max-width: 420px;
+}
+
+.semester-transfer-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    max-width: 520px;
+}
+
+.semester-transfer-label {
+    font-size: 0.85rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.semester-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.semester-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    transition: border-color 0.15s;
+}
+
+.semester-card.current {
+    border-color: #22c55e;
+    background: #f0fdf4;
+}
+
+.semester-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.semester-card-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.semester-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.semester-type-badge {
+    font-size: 0.75rem;
+}
+
+.semester-dates {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.semester-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.semester-preview {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e2e8f0;
+    font-size: 0.85rem;
+    color: #475569;
+}
+
+.add-role-student-check {
+    margin-top: 0.4rem;
+    font-size: 0.82rem;
+    color: #64748b;
 }

@@ -24,25 +24,27 @@ export default function AvailableForms(props) {
     return (
         <div className="available-forms">
             {props.forms.length === 0 ? (
-                <p>{t("noAvailableForms")}</p>
+                <p className="forms-empty">{t("noAvailableForms")}</p>
             ) : (
-                <div className="table-wrapper">
-                    <table className="forms-table">
-                        <thead>
-                        <tr>
-                            <th>{t("formName")}</th>
-                            <th>{t("createdAt")}</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {props.forms.map((form) => (
-                            <tr key={form.id} onClick={() => navigate(`/form/${form.id}?type=start`, { state: { form } })} style={{ cursor: "pointer" }}>
-                                <td>{form.Processes.name}</td>
-                                <td>{new Date(form.createdAt).toLocaleDateString()}</td>
+                <div className="forms-list-card">
+                    <div className="table-wrapper">
+                        <table className="forms-table">
+                            <thead>
+                            <tr>
+                                <th>{t("formName")}</th>
+                                <th>{t("createdAt")}</th>
                             </tr>
-                        ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                            {props.forms.map((form) => (
+                                <tr key={form.id} onClick={() => navigate(`/form/${form.id}?type=start`, { state: { form } })} style={{ cursor: "pointer" }}>
+                                    <td>{form.Processes.name}</td>
+                                    <td>{new Date(form.createdAt).toLocaleDateString()}</td>
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
         </div>

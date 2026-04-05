@@ -116,3 +116,30 @@
     font-weight: 600;
     margin-top: 0.25rem;
 }
+
+.cascading-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.onboarding-hint {
+    font-size: 0.82rem;
+    color: #888;
+    margin: 0.25rem 0 0.5rem;
+}
+
+.onboarding-hint-warn {
+    color: #c0392b;
+}
+
+.onboarding-selected-unit {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #1a7f37;
+    background: #eafbee;
+    border: 1px solid #a8e6b8;
+    border-radius: 8px;
+    padding: 0.4rem 0.75rem;
+    margin-top: 0.25rem;
+}

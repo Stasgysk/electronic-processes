@@ -55,7 +55,7 @@ function JoinRoleForm({ browseRoles, myRoleIds, onJoined }) {
     return (
         <div className="join-role-form">
             <Form.Group className="mb-2">
-                <Form.Label className="join-role-label" column={}>{t('profile.selectRole')}</Form.Label>
+                <Form.Label className="join-role-label">{t('profile.selectRole')}</Form.Label>
                 <Form.Select
                     value={selectedRoleId}
                     onChange={e => { setSelectedRoleId(e.target.value); setError(''); setSuccess(''); }}
@@ -83,7 +83,7 @@ function JoinRoleForm({ browseRoles, myRoleIds, onJoined }) {
 
             {selectedRoleId && needsCode && (
                 <Form.Group className="mb-2">
-                    <Form.Label className="join-role-label" column={}>{t('profile.accessCode')}</Form.Label>
+                    <Form.Label className="join-role-label">{t('profile.accessCode')}</Form.Label>
                     <InputGroup size="sm">
                         <Form.Control
                             type="password"
@@ -169,7 +169,7 @@ export default function ProfilePage() {
             {loading ? (
                 <div className="profile-loading"><Spinner /></div>
             ) : (
-                <>
+                <div className="profile-body">
                     <section className="profile-section">
                         <h4 className="profile-section-title">{t('profile.myRoles')}</h4>
                         {myAssignments.length === 0 ? (
@@ -196,7 +196,7 @@ export default function ProfilePage() {
                             />
                         )}
                     </section>
-                </>
+                </div>
             )}
         </div>
     );

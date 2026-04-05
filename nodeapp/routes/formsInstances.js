@@ -566,15 +566,39 @@ async function isProcessFinished(processInstanceId) {
 
 async function resolveRoleToUsers(roleName, initiatorUserId) {
     const { Op } = require('sequelize');
+
+    const currentSemester = await postgres.Semesters.findOne({ where: { isCurrent: true } });
+    const now = new Date();
+    const temporalWhere = currentSemester
+        ? {
+            [Op.or]: [
+                { semesterId: currentSemester.id },
+                {
+                    semesterId: null,
+                    [Op.and]: [
+                        { [Op.or]: [{ validFrom: null }, { validFrom: { [Op.lte]: now } }] },
+                        { [Op.or]: [{ validTo: null }, { validTo: { [Op.gte]: now } }] },
+                    ],
+                },
+            ],
+        }
+        : {
+            [Op.and]: [
+                { [Op.or]: [{ validFrom: null }, { validFrom: { [Op.lte]: now } }] },
+                { [Op.or]: [{ validTo: null }, { validTo: { [Op.gte]: now } }] },
+            ],
+        };
+
     const anyPatternRole = await postgres.OrgRoles.findOne({
         where: { name: roleName, emailPattern: { [Op.not]: null } },
     });
-
     if (anyPatternRole) {
         const allRoles = await postgres.OrgRoles.findAll({ where: { name: roleName } });
         const resolvedUserIds = new Set();
         for (const role of allRoles) {
-            const userOrgRoles = await postgres.UserOrgRoles.entities({ orgRoleId: role.id });
+            const userOrgRoles = await postgres.UserOrgRoles.findAll({
+                where: { orgRoleId: role.id, ...temporalWhere },
+            });
             userOrgRoles.forEach(uor => resolvedUserIds.add(uor.userId));
         }
         return [...resolvedUserIds];
@@ -589,6 +613,19 @@ async function resolveRoleToUsers(roleName, initiatorUserId) {
     const workplaces = await postgres.UserWorkplaces.entities({ userId: initiatorUserId });
     workplaces.forEach(wp => startUnitIds.add(wp.orgUnitId));
 
+    const studentRoleAssignments = await postgres.UserOrgRoles.findAll({
+        where: { userId: initiatorUserId, ...temporalWhere },
+        include: [{
+            model: postgres.OrgRoles,
+            as: 'OrgRole',
+            where: { isStudentRole: true },
+            required: true,
+        }],
+    });
+    for (const sra of studentRoleAssignments) {
+        if (sra.OrgRole?.orgUnitId) startUnitIds.add(sra.OrgRole.orgUnitId);
+    }
+
     if (startUnitIds.size === 0) return [];
 
     const resolvedUserIds = new Set();
@@ -597,7 +634,9 @@ async function resolveRoleToUsers(roleName, initiatorUserId) {
         while (currentUnitId != null) {
             const orgRole = await postgres.OrgRoles.entity({ orgUnitId: currentUnitId, name: roleName });
             if (orgRole) {
-                const userOrgRoles = await postgres.UserOrgRoles.entities({ orgRoleId: orgRole.id });
+                const userOrgRoles = await postgres.UserOrgRoles.findAll({
+                    where: { orgRoleId: orgRole.id, ...temporalWhere },
+                });
                 if (userOrgRoles.length > 0) {
                     userOrgRoles.forEach(uor => resolvedUserIds.add(uor.userId));
                     break;
@@ -609,6 +648,120 @@ async function resolveRoleToUsers(roleName, initiatorUserId) {
     }
     return [...resolvedUserIds];
 }
+
+/* POST re-resolve role-based form instances for a process instance where resolution returned 0 users */
+router.post('/re-resolve/:processInstanceId', async function (req, res) {
+    try {
+        const result = await reResolveProcessInstance(req.params.processInstanceId);
+        if (result.error) return res.status(400).json(resBuilder.fail(result.error));
+        return res.status(200).json(resBuilder.success(result));
+    } catch (e) {
+        logger.error(e);
+        return res.status(500).json(resBuilder.error("Something went wrong while re-resolving form instances"));
+    }
+});
+
+async function reResolveProcessInstance(processInstanceId) {
+    const processInstance = await postgres.ProcessesInstances.entity({ id: processInstanceId });
+    if (!processInstance) return { error: "Process instance not found" };
+
+    const processForms = await postgres.Forms.entities({ processId: processInstance.processId }, true);
+    const startingForm = processForms.find(f => f.isStartingNode);
+    if (!startingForm) return { error: "Starting form not found" };
+
+    const startingInstance = await postgres.FormsInstances.entity({
+        formId: startingForm.id,
+        processInstanceId,
+    });
+    if (!startingInstance) return { error: "Starting form instance not found" };
+
+    const initiatorUserId = startingInstance.filledUserId;
+    if (!initiatorUserId) return { error: "Initiator user not found" };
+
+    const allInstances = await postgres.FormsInstances.entities({ processInstanceId });
+    const filledFormInstanceIds = new Set(
+        allInstances
+            .filter(fi => fi.status === formStatuses.FILLED)
+            .map(fi => fi.formInstanceId)
+    );
+
+    let created = 0;
+    const nextNodesIds = [];
+
+    for (const processForm of processForms) {
+        if (processForm.formAssigneeType !== 'role') continue;
+
+        const existingInstances = allInstances.filter(
+            fi => fi.formId === processForm.id && fi.instanceAssigneeType === 'role'
+        );
+        if (existingInstances.length > 0) continue;
+
+        const roleAssignee = processForm.FormsAssignees.find(fa => fa.roleName);
+        if (!roleAssignee) continue;
+
+        const resolvedUserIds = await resolveRoleToUsers(roleAssignee.roleName, initiatorUserId);
+        if (resolvedUserIds.length === 0) continue;
+
+        const deps = await postgres.FormsDependencies.entities({ formId: processForm.dataValues.formId });
+        const hasFulfilledDep = deps.some(dep => filledFormInstanceIds.has(dep.prevFormId));
+        const formStatus = hasFulfilledDep ? formStatuses.WAITING : formStatuses.INACTIVE;
+
+        for (const resolvedUserId of resolvedUserIds) {
+            const newFormInstance = await postgres.FormsInstances.create({
+                formData: {},
+                formInstanceId: processForm.dataValues.formId,
+                status: formStatus,
+                formId: processForm.id,
+                webhookUrl: 'temp',
+                processInstanceId,
+                instanceAssigneeType: 'role',
+                assigneeId: [resolvedUserId],
+            });
+            created++;
+            if (formStatus === formStatuses.WAITING) {
+                nextNodesIds.push({
+                    formProcessId: newFormInstance.dataValues.id,
+                    formInstanceId: newFormInstance.dataValues.formInstanceId,
+                });
+            }
+        }
+    }
+
+    return { created, nextNodesIds };
+}
+
+async function findStuckProcessInstancesForRole(roleName) {
+    const { Op } = require('sequelize');
+
+    const formsAssignees = await postgres.FormsAssignees.findAll({ where: { roleName } });
+    const formIds = [...new Set(formsAssignees.map(fa => fa.formId))];
+    if (formIds.length === 0) return [];
+
+    const existingInstances = await postgres.FormsInstances.findAll({
+        where: { formId: formIds, instanceAssigneeType: 'role' },
+        attributes: ['formId', 'processInstanceId'],
+    });
+    const coveredPairs = new Set(existingInstances.map(fi => `${fi.formId}:${fi.processInstanceId}`));
+
+    const activeProcessInstances = await postgres.ProcessesInstances.findAll({
+        where: { status: { [Op.ne]: 'ended' } },
+        limit: 500,
+    });
+
+    const stuckIds = new Set();
+    for (const pi of activeProcessInstances) {
+        for (const formId of formIds) {
+            if (!coveredPairs.has(`${formId}:${pi.id}`)) {
+                stuckIds.add(pi.id);
+                break;
+            }
+        }
+    }
+    return [...stuckIds];
+}
+
+router.reResolveProcessInstance = reResolveProcessInstance;
+router.findStuckProcessInstancesForRole = findStuckProcessInstancesForRole;
 
 async function getAllPrevFormIds(startFormId) {
     const visited = new Set();

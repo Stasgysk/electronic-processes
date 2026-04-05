@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Form, InputGroup, Modal, Spinner, Badge } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 import { getOrgUnitsTree, getOrgUnitsFlat, createOrgUnit, updateOrgUnit, deleteOrgUnit, searchUsers, assignUserOrgUnit, cloneOrgUnit, getAllUsers, addUserWorkplace, removeUserWorkplace } from '../api/orgUnits.service';
 import { getOrgRoles, createOrgRole, updateOrgRole, deleteOrgRole } from '../api/orgRoles.service';
 import { assignUserToRole, removeUserFromRole } from '../api/userOrgRoles.service';
+import { getSemesters, createSemester, deleteSemester, activateSemester, previewTransition, transitionStudents, copyProfessors } from '../api/semesters.service';
 import './AdminPage.css';
 
 function TreeNode({ unit, selectedId, onSelect, onAddChild, onDelete, onClone, onTogglePickable, depth = 0 }) {
@@ -56,12 +57,15 @@ function RoleCard({ role, onDelete, onUpdate }) {
     const [emailPattern, setEmailPattern] = useState(role.emailPattern || '');
     const [accessCode, setAccessCode] = useState(role.accessCode || '');
     const [showCode, setShowCode] = useState(false);
+    const [roleSortOrder, setRoleSortOrder] = useState(role.sortOrder != null ? String(role.sortOrder) : '');
     const [saving, setSaving] = useState(false);
 
     const handleSaveSettings = async () => {
         setSaving(true);
         try {
-            const updated = await updateOrgRole(role.id, { emailPattern: emailPattern || null, accessCode: accessCode || null });
+            const parsedOrder = parseInt(roleSortOrder);
+            const sortOrder = roleSortOrder.trim() !== '' && !isNaN(parsedOrder) ? parsedOrder : null;
+            const updated = await updateOrgRole(role.id, { emailPattern: emailPattern || null, accessCode: accessCode || null, sortOrder });
             onUpdate(updated.data);
         } catch (e) {
             console.error(e);
@@ -142,6 +146,22 @@ function RoleCard({ role, onDelete, onUpdate }) {
                 <p className="role-field-hint">{t('accessCodeHint')}</p>
             </div>
 
+            {role.isStudentRole && (
+                <div className="role-card-section">
+                    <label className="role-field-label">{t('sortOrder')}</label>
+                    <InputGroup size="sm">
+                        <Form.Control
+                            type="number"
+                            min="1"
+                            value={roleSortOrder}
+                            onChange={e => setRoleSortOrder(e.target.value)}
+                            placeholder={t('unitSortOrderPlaceholder')}
+                        />
+                    </InputGroup>
+                    <p className="role-field-hint">{t('sortOrderHint')}</p>
+                </div>
+            )}
+
             <Button size="sm" variant="outline-primary" onClick={handleSaveSettings} disabled={saving} className="mb-3">
                 {saving ? <Spinner size="sm" /> : t('saveSettings')}
             </Button>
@@ -190,11 +210,12 @@ function RoleCard({ role, onDelete, onUpdate }) {
     );
 }
 
-function RolesPanel({ unit, onRefresh }) {
+function RolesPanel({ unit, onRefresh, onUnitUpdate }) {
     const { t } = useTranslation();
     const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(false);
     const [newRoleName, setNewRoleName] = useState('');
+    const [newRoleIsStudent, setNewRoleIsStudent] = useState(false);
     const [adding, setAdding] = useState(false);
 
     const loadRoles = useCallback(async () => {
@@ -216,9 +237,10 @@ function RolesPanel({ unit, onRefresh }) {
         if (!newRoleName.trim()) return;
         setAdding(true);
         try {
-            const res = await createOrgRole({ name: newRoleName.trim(), orgUnitId: unit.id });
+            const res = await createOrgRole({ name: newRoleName.trim(), orgUnitId: unit.id, isStudentRole: newRoleIsStudent });
             setRoles(prev => [...prev, { ...res.data, UserOrgRoles: [] }]);
             setNewRoleName('');
+            setNewRoleIsStudent(false);
         } catch (e) {
             console.error(e);
         } finally {
@@ -268,6 +290,14 @@ function RolesPanel({ unit, onRefresh }) {
                         {adding ? <Spinner size="sm" /> : t('addRole')}
                     </Button>
                 </InputGroup>
+                <Form.Check
+                    type="checkbox"
+                    id="new-role-is-student"
+                    label={t('isStudentRole')}
+                    checked={newRoleIsStudent}
+                    onChange={e => setNewRoleIsStudent(e.target.checked)}
+                    className="add-role-student-check"
+                />
             </div>
 
             {loading ? (
@@ -285,6 +315,21 @@ function RolesPanel({ unit, onRefresh }) {
     );
 }
 
+function buildUnitPath(unitId, flatUnits) {
+    const path = [];
+    let currentId = unitId;
+    const visited = new Set();
+    while (currentId && !visited.has(currentId)) {
+        visited.add(currentId);
+        const unit = flatUnits.find(u => u.id === currentId);
+        if (!unit) break;
+        path.unshift(unit.name);
+        currentId = unit.parentId;
+    }
+    // Skip root university node (first element) to keep it concise
+    return path.length > 1 ? path.slice(1).join(' › ') : path.join(' › ');
+}
+
 function UserExpandedRow({ user, flatUnits, allRoles, onUpdate }) {
     const { t } = useTranslation();
     const [addRoleIds, setAddRoleIds] = useState(new Set());
@@ -294,7 +339,10 @@ function UserExpandedRow({ user, flatUnits, allRoles, onUpdate }) {
     const [saving, setSaving] = useState(false);
 
     const userUnits = (user.UserWorkplaces || []).filter(wp => wp.OrgUnit);
-    const userUnitIds = new Set(userUnits.map(wp => wp.orgUnitId));
+    const userUnitIds = new Set([
+        ...userUnits.map(wp => wp.orgUnitId),
+        ...(user.orgUnitId ? [user.orgUnitId] : []),
+    ]);
 
     const existingRoleIds = new Set((user.UserOrgRoles || []).map(r => r.orgRoleId));
     const availableRoles = allRoles.filter(r => userUnitIds.has(r.orgUnitId) && !existingRoleIds.has(r.id));
@@ -361,6 +409,7 @@ function UserExpandedRow({ user, flatUnits, allRoles, onUpdate }) {
                         {(user.UserOrgRoles || []).length === 0 && <span className="uap-no-roles">—</span>}
                         {(user.UserOrgRoles || []).map(r => {
                             const staged = removeRoleAssignIds.has(r.id);
+                            const roleUnit = flatUnits.find(u => u.id === r.OrgRole?.orgUnitId);
                             return (
                                 <span
                                     key={r.id}
@@ -369,6 +418,7 @@ function UserExpandedRow({ user, flatUnits, allRoles, onUpdate }) {
                                     title={staged ? (t('clickToCancel') || 'Klikni pre zrušenie') : (t('clickToRemove') || 'Klikni pre odobratie')}
                                 >
                                     {r.OrgRole?.name || '?'}
+                                    {roleUnit && <span className="uap-chip-unit"> · {roleUnit.name}</span>}
                                     <span className="uap-chip-rm">{staged ? '↩' : '×'}</span>
                                 </span>
                             );
@@ -404,9 +454,19 @@ function UserExpandedRow({ user, flatUnits, allRoles, onUpdate }) {
 
                 <td className="uap-exp-cell">
                     <div className="uap-exp-chips">
-                        {userUnits.length === 0 && <span className="uap-no-roles">—</span>}
+                        {user.orgUnitId && (() => {
+                            const primaryUnit = flatUnits.find(u => u.id === user.orgUnitId);
+                            const fullPath = primaryUnit ? buildUnitPath(user.orgUnitId, flatUnits) : null;
+                            return primaryUnit ? (
+                                <span className="uap-unit-chip primary" title={fullPath}>
+                                    {fullPath}
+                                </span>
+                            ) : null;
+                        })()}
+                        {userUnits.length === 0 && !user.orgUnitId && <span className="uap-no-roles">—</span>}
                         {userUnits.map(wp => {
                             const staged = removeWpIds.has(wp.id);
+                            const wpPath = wp.OrgUnit ? buildUnitPath(wp.orgUnitId, flatUnits) : wp.OrgUnit?.name;
                             return (
                                 <span
                                     key={wp.id}
@@ -414,7 +474,7 @@ function UserExpandedRow({ user, flatUnits, allRoles, onUpdate }) {
                                     onClick={() => toggle(setRemoveWpIds, wp.id)}
                                     title={staged ? (t('clickToCancel') || 'Klikni pre zrušenie') : (t('clickToRemove') || 'Klikni pre odobratie')}
                                 >
-                                    {wp.OrgUnit.name}
+                                    {wpPath || wp.OrgUnit?.name}
                                     <span className="uap-chip-rm">{staged ? '↩' : '×'}</span>
                                 </span>
                             );
@@ -580,6 +640,10 @@ function UserAssignmentsPanel({ flatUnits }) {
                                 const unitChips = workplaces
                                     .filter(wp => wp.OrgUnit)
                                     .map(wp => ({ id: `w-${wp.id}`, name: wp.OrgUnit.name }));
+                                if (user.orgUnitId && !workplaces.some(wp => wp.orgUnitId === user.orgUnitId)) {
+                                    const primaryUnit = flatUnits.find(u => u.id === user.orgUnitId);
+                                    if (primaryUnit) unitChips.unshift({ id: `ou-${user.orgUnitId}`, name: primaryUnit.name });
+                                }
 
                                 return (
                                     <React.Fragment key={user.id}>
@@ -645,7 +709,8 @@ function AddUnitModal({ show, onHide, onAdd, parentUnit }) {
         if (!name.trim()) return;
         setSaving(true);
         try {
-            const res = await createOrgUnit({ name: name.trim(), type: type.trim() || null, parentId: parentUnit ? parentUnit.id : null });
+            const body = { name: name.trim(), type: type.trim() || null, parentId: parentUnit ? parentUnit.id : null };
+            const res = await createOrgUnit(body);
             onAdd(res.data);
             onHide();
         } catch (e) {
@@ -664,11 +729,11 @@ function AddUnitModal({ show, onHide, onAdd, parentUnit }) {
             </Modal.Header>
             <Modal.Body>
                 <Form.Group className="mb-3">
-                    <Form.Label column={}>{t('unitName')} *</Form.Label>
+                    <Form.Label>{t('unitName')} *</Form.Label>
                     <Form.Control value={name} onChange={e => setName(e.target.value)} placeholder={t('unitNamePlaceholder')} autoFocus />
                 </Form.Group>
-                <Form.Group>
-                    <Form.Label column={}>{t('unitType')} <small className="text-muted">({t('optional')})</small></Form.Label>
+                <Form.Group className="mb-3">
+                    <Form.Label>{t('unitType')} <small className="text-muted">({t('optional')})</small></Form.Label>
                     <Form.Control value={type} onChange={e => setType(e.target.value)} placeholder={t('unitTypePlaceholder')} />
                 </Form.Group>
             </Modal.Body>
@@ -711,7 +776,7 @@ function CloneUnitModal({ show, onHide, onCloned, sourceUnit }) {
             <Modal.Body>
                 <p className="text-muted" style={{ fontSize: '0.9rem' }}>{t('cloneUnitHint')}</p>
                 <Form.Group>
-                    <Form.Label column={}>{t('newUnitName')} *</Form.Label>
+                    <Form.Label>{t('newUnitName')} *</Form.Label>
                     <Form.Control value={name} onChange={e => setName(e.target.value)} autoFocus />
                 </Form.Group>
             </Modal.Body>
@@ -722,6 +787,218 @@ function CloneUnitModal({ show, onHide, onCloned, sourceUnit }) {
                 </Button>
             </Modal.Footer>
         </Modal>
+    );
+}
+
+function SemesterPanel() {
+    const { t } = useTranslation();
+    const [semesters, setSemesters] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [showCreate, setShowCreate] = useState(false);
+    const [form, setForm] = useState({ name: '', type: 'ZIMNY', academicYear: '', startDate: '', endDate: '' });
+    const [saving, setSaving] = useState(false);
+    const [fromSemesterId, setFromSemesterId] = useState('');
+    const [previewFor, setPreviewFor] = useState(null);
+    const [preview, setPreview] = useState(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [transitioning, setTransitioning] = useState(false);
+    const [copying, setCopying] = useState(false);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await getSemesters();
+            setSemesters(res.data || []);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const handleCreate = async () => {
+        setSaving(true);
+        try {
+            await createSemester(form);
+            setShowCreate(false);
+            setForm({ name: '', type: 'ZIMNY', academicYear: '', startDate: '', endDate: '' });
+            load();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleActivate = async (semester) => {
+        if (!window.confirm(t('activateSemesterConfirm'))) return;
+        try {
+            await activateSemester(semester.id);
+            load();
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handlePreview = async (toSemesterId) => {
+        if (!fromSemesterId) return;
+        setPreviewLoading(true);
+        setPreviewFor(toSemesterId);
+        try {
+            const res = await previewTransition(toSemesterId, fromSemesterId);
+            setPreview(res.data);
+        } catch (e) {
+            console.error(e);
+            setPreview(null);
+        } finally {
+            setPreviewLoading(false);
+        }
+    };
+
+    const handleTransitionStudents = async (toSemesterId) => {
+        if (!fromSemesterId) return;
+        if (!window.confirm(t('transitionStudentsConfirm'))) return;
+        setTransitioning(true);
+        try {
+            await transitionStudents(toSemesterId, fromSemesterId);
+            setPreview(null);
+            setPreviewFor(null);
+            load();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setTransitioning(false);
+        }
+    };
+
+    const handleCopyProfessors = async (toSemesterId) => {
+        if (!fromSemesterId) return;
+        if (!window.confirm(t('copyProfessorsConfirm'))) return;
+        setCopying(true);
+        try {
+            await copyProfessors(toSemesterId, fromSemesterId);
+            load();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setCopying(false);
+        }
+    };
+
+    const handleDelete = async (semester) => {
+        if (!window.confirm(t('deleteSemesterConfirm'))) return;
+        try {
+            await deleteSemester(semester.id);
+            load();
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    return (
+        <div className="semester-panel">
+            <div className="semester-panel-header">
+                <h4 className="panel-section-title">{t('semestres')}</h4>
+                <Button size="sm" variant="outline-primary" onClick={() => setShowCreate(p => !p)}>
+                    {t('createSemester')}
+                </Button>
+            </div>
+
+            {showCreate && (
+                <div className="semester-create-form">
+                    <Form.Group className="mb-2">
+                        <Form.Label>{t('semesterName')}</Form.Label>
+                        <Form.Control size="sm" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Zimný 2025/26" />
+                    </Form.Group>
+                    <Form.Group className="mb-2">
+                        <Form.Label>{t('semesterType')}</Form.Label>
+                        <Form.Select size="sm" value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}>
+                            <option value="ZIMNY">{t('zimny')}</option>
+                            <option value="LETNY">{t('letny')}</option>
+                        </Form.Select>
+                    </Form.Group>
+                    <Form.Group className="mb-2">
+                        <Form.Label>{t('academicYear')}</Form.Label>
+                        <Form.Control size="sm" value={form.academicYear} onChange={e => setForm(p => ({ ...p, academicYear: e.target.value }))} placeholder="2025/26" />
+                    </Form.Group>
+                    <Form.Group className="mb-2">
+                        <Form.Label>{t('startDate')}</Form.Label>
+                        <Form.Control size="sm" type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} />
+                    </Form.Group>
+                    <Form.Group className="mb-2">
+                        <Form.Label>{t('endDate')}</Form.Label>
+                        <Form.Control size="sm" type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))} />
+                    </Form.Group>
+                    <Button size="sm" variant="primary" onClick={handleCreate} disabled={saving || !form.name || !form.academicYear || !form.startDate || !form.endDate}>
+                        {saving ? <Spinner size="sm" /> : t('create')}
+                    </Button>
+                </div>
+            )}
+
+            <div className="semester-transfer-bar">
+                <span className="semester-transfer-label">{t('transferFrom')}</span>
+                <Form.Select size="sm" value={fromSemesterId} onChange={e => { setFromSemesterId(e.target.value); setPreview(null); setPreviewFor(null); }}>
+                    <option value="">— {t('selectSemester')} —</option>
+                    {semesters.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                </Form.Select>
+            </div>
+
+            {loading ? (
+                <div className="loading-center"><Spinner /></div>
+            ) : semesters.length === 0 ? (
+                <p className="no-content-hint">{t('noSemestersYet')}</p>
+            ) : (
+                <div className="semester-list">
+                    {semesters.map(s => (
+                        <div key={s.id} className={`semester-card${s.isCurrent ? ' current' : ''}`}>
+                            <div className="semester-card-top">
+                                <div className="semester-card-info">
+                                    <span className="semester-name">{s.name}</span>
+                                    <Badge bg={s.type === 'ZIMNY' ? 'primary' : 'warning'} text={s.type === 'LETNY' ? 'dark' : undefined} className="semester-type-badge">{s.type}</Badge>
+                                    {s.isCurrent && <Badge bg="success">{t('currentSemester')}</Badge>}
+                                    <span className="semester-dates">{s.startDate} → {s.endDate}</span>
+                                </div>
+                                <div className="semester-card-actions">
+                                    {!s.isCurrent && (
+                                        <Button size="sm" variant="outline-success" onClick={() => handleActivate(s)}>
+                                            {t('activate')}
+                                        </Button>
+                                    )}
+                                    {fromSemesterId && String(fromSemesterId) !== String(s.id) && (
+                                        <>
+                                            <Button size="sm" variant="outline-secondary" onClick={() => handlePreview(s.id)} disabled={previewLoading}>
+                                                {previewLoading && previewFor === s.id ? <Spinner size="sm" /> : t('previewTransition')}
+                                            </Button>
+                                            <Button size="sm" variant="outline-primary" onClick={() => handleTransitionStudents(s.id)} disabled={transitioning}>
+                                                {transitioning ? <Spinner size="sm" /> : t('transitionStudents')}
+                                            </Button>
+                                            <Button size="sm" variant="outline-secondary" onClick={() => handleCopyProfessors(s.id)} disabled={copying}>
+                                                {copying ? <Spinner size="sm" /> : t('copyProfessors')}
+                                            </Button>
+                                        </>
+                                    )}
+                                    {!s.isCurrent && (
+                                        <Button size="sm" variant="outline-danger" onClick={() => handleDelete(s)}>×</Button>
+                                    )}
+                                </div>
+                            </div>
+                            {previewFor === s.id && preview && (
+                                <div className="semester-preview">
+                                    <span>{t('isYearTransition')}: <strong>{preview.isYearTransition ? t('yes') : t('no')}</strong></span>
+                                    <span>{t('studentsTransitioning')}: <strong>{preview.studentsTransitioning}</strong></span>
+                                    <span>{t('studentsGraduating')}: <strong>{preview.studentsGraduating}</strong></span>
+                                    <span>{t('professorsTotal')}: <strong>{preview.professorsTotal}</strong></span>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -738,8 +1015,10 @@ export default function AdminPage() {
     const [showCloneModal, setShowCloneModal] = useState(false);
     const [cloneSource, setCloneSource] = useState(null);
 
+    const isInitialLoad = useRef(true);
+
     const loadTree = useCallback(async () => {
-        setLoading(true);
+        if (isInitialLoad.current) setLoading(true);
         try {
             const [treeRes, flatRes] = await Promise.all([getOrgUnitsTree(), getOrgUnitsFlat()]);
             setTree(treeRes.data || []);
@@ -748,6 +1027,7 @@ export default function AdminPage() {
             console.error(e);
         } finally {
             setLoading(false);
+            isInitialLoad.current = false;
         }
     }, []);
 
@@ -773,12 +1053,17 @@ export default function AdminPage() {
         }
     };
 
+    const handleUnitUpdate = (updatedUnit) => {
+        setSelectedUnit(prev => prev ? { ...prev, ...updatedUnit } : prev);
+        loadTree();
+    };
+
     return (
         <div className="admin-page">
             <div className="admin-topbar">
                 <h3>{t('adminPanel')}</h3>
                 <div className="admin-tabs">
-                    {[['org', 'orgStructureRoles'], ['users', 'userAssignments']].map(([key, label]) => (
+                    {[['org', 'orgStructureRoles'], ['users', 'userAssignments'], ['semesters', 'semestres']].map(([key, label]) => (
                         <button key={key} className={`admin-tab${activeTab === key ? ' active' : ''}`} onClick={() => setActiveTab(key)}>
                             {t(label)}
                         </button>
@@ -819,7 +1104,7 @@ export default function AdminPage() {
                     </aside>
 
                     <main className="roles-main">
-                        <RolesPanel unit={selectedUnit} onRefresh={loadTree} />
+                        <RolesPanel unit={selectedUnit} onRefresh={loadTree} onUnitUpdate={handleUnitUpdate} />
                     </main>
                 </div>
             )}
@@ -827,6 +1112,12 @@ export default function AdminPage() {
             {activeTab === 'users' && (
                 <div className="admin-layout single">
                     <UserAssignmentsPanel flatUnits={flatUnits} />
+                </div>
+            )}
+
+            {activeTab === 'semesters' && (
+                <div className="admin-layout single">
+                    <SemesterPanel />
                 </div>
             )}
 

@@ -24,34 +24,36 @@ export default function AwaitingForms(props) {
     return (
         <div className="available-forms">
             {props.forms.length === 0 ? (
-                <p>{t("noAvailableForms")}</p>
+                <p className="forms-empty">{t("noAvailableForms")}</p>
             ) : (
-                <div className="table-wrapper">
-                    <table className="forms-table">
-                        <thead>
-                        <tr>
-                            <th>{t("formName")}</th>
-                            <th>{`${t("status")}/${t("initialUserName")}`}</th>
-                            <th>{t("createdAt")}</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {props.forms.processesInstances.map((processInstance) => (
-                            <tr key={processInstance.id} onClick={() => navigate(`/form/${processInstance.id}?type=filled`, { state: { form: processInstance } })} style={{ cursor: "pointer" }}>
-                                <td>{processInstance.name}</td>
-                                <td>{processInstance.status}</td>
-                                <td>{new Date(processInstance.createdAt).toLocaleDateString()}</td>
+                <div className="forms-list-card">
+                    <div className="table-wrapper">
+                        <table className="forms-table">
+                            <thead>
+                            <tr>
+                                <th>{t("formName")}</th>
+                                <th>{`${t("status")}/${t("initialUserName")}`}</th>
+                                <th>{t("createdAt")}</th>
                             </tr>
-                        ))}
-                        {props.forms.formsInstances.map((formInstance) => (
-                            <tr key={formInstance.id} onClick={() => navigate(`/form/${formInstance.id}?processInstanceId=${formInstance.processInstanceId}&type=filled`, { state: { form: formInstance } })} style={{ cursor: "pointer" }}>
-                                <td>{formInstance.formName}</td>
-                                <td>{formInstance.initialUserName}</td>
-                                <td>{new Date(formInstance.createdAt).toLocaleDateString()}</td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                            {props.forms.processesInstances.map((processInstance) => (
+                                <tr key={processInstance.id} onClick={() => navigate(`/form/${processInstance.id}?type=filled`, { state: { form: processInstance } })} style={{ cursor: "pointer" }}>
+                                    <td>{processInstance.name}</td>
+                                    <td>{processInstance.status}</td>
+                                    <td>{new Date(processInstance.createdAt).toLocaleDateString()}</td>
+                                </tr>
+                            ))}
+                            {props.forms.formsInstances.map((formInstance) => (
+                                <tr key={formInstance.id} onClick={() => navigate(`/form/${formInstance.id}?processInstanceId=${formInstance.processInstanceId}&type=filled`, { state: { form: formInstance } })} style={{ cursor: "pointer" }}>
+                                    <td>{formInstance.formName}</td>
+                                    <td>{formInstance.initialUserName}</td>
+                                    <td>{new Date(formInstance.createdAt).toLocaleDateString()}</td>
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
         </div>
