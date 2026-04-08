@@ -13,9 +13,6 @@ module.exports = (sequelize, DataTypes, name) => {
         formData: {
             type: DataTypes.JSON,
             allowNull: false,
-            validate: {
-                notEmpty: true,
-            },
         },
         formId: {
             type: DataTypes.TEXT,
@@ -26,8 +23,17 @@ module.exports = (sequelize, DataTypes, name) => {
             allowNull: false,
         },
         formAssigneeType: {
-            type: DataTypes.ENUM('group', 'shared_emails', 'individual_emails', 'role'),
+            type: DataTypes.ENUM('group', 'shared_emails', 'individual_emails', 'role', 'action'),
             allowNull: false,
+        },
+        formType: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: 'form',
+        },
+        actionWorkflowNodes: {
+            type: DataTypes.JSON,
+            allowNull: true,
         },
         isStartingNode: {
             type: DataTypes.BOOLEAN,

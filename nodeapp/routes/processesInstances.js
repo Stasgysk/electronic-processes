@@ -2,7 +2,6 @@
 /* global resBuilder */
 
 let express = require('express');
-require("../oldstuff/FormController");
 const routesUtils = require("../utils/RoutesUtils");
 const formStatuses = require('../enums/FormStatuses');
 const {Op} = require("sequelize");

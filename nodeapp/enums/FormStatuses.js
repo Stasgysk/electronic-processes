@@ -6,6 +6,7 @@ const FormStatusesEnum = Object.freeze({
     REJECTED: 'rejected',
     WAITING: 'waiting',
     INACTIVE: 'inactive',
+    SKIPPED: 'skipped',
 });
 
 module.exports = FormStatusesEnum;

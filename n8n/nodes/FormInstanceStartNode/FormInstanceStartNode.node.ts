@@ -67,6 +67,9 @@ export class FormInstanceStartNode implements INodeType {
 				json: {
 					step: 'first',
 					message: 'Logika pred priradením formy',
+					formData: (body as any).formData || [],
+					formName: (body as any).formName || '',
+					formSubmittedByUser: (body as any).formSubmittedByUser || null,
 					input: body,
 				},
 			},

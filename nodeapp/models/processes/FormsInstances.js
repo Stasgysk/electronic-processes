@@ -42,7 +42,7 @@ module.exports = (sequelize, DataTypes, name) => {
             allowNull: false,
         },
         instanceAssigneeType: {
-            type: DataTypes.ENUM('group', 'shared_emails', 'individual_emails', 'role'),
+            type: DataTypes.ENUM('group', 'shared_emails', 'individual_emails', 'role', 'action'),
             allowNull: false,
         },
         assigneeId: {

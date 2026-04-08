@@ -21,6 +21,7 @@ let orgRolesRouter = require('./routes/orgRoles');
 let userOrgRolesRouter = require('./routes/userOrgRoles');
 let userWorkplacesRouter = require('./routes/userWorkplaces');
 let semestersRouter = require('./routes/semesters');
+let formConditionsRouter = require('./routes/formConditions');
 const fs = require("fs");
 let logger = require('./utils/Logger');
 let resBuilder = require('./utils/ResponseBuilder');
@@ -107,6 +108,7 @@ app.use('/orgRoles', orgRolesRouter);
 app.use('/userOrgRoles', userOrgRolesRouter);
 app.use('/userWorkplaces', userWorkplacesRouter);
 app.use('/semesters', semestersRouter);
+app.use('/formConditions', formConditionsRouter);
 
 app.use(function(req, res, next) {
     next(createError(404));

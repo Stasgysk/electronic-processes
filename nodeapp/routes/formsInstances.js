@@ -120,14 +120,16 @@ router.get('/previous', async function (req, res) {
         const previousFormsIds = await getAllPrevFormIds(currentFormInstance.formInstanceId);
         const previousFormsInstances = await postgres.FormsInstances.entities({formInstanceId: { [Op.in]: previousFormsIds }, processInstanceId: processInstanceId}, true);
 
-        previousFormsInstances.map(f => {
+        const filteredInstances = previousFormsInstances.filter(f => f.dataValues.instanceAssigneeType !== 'action');
+
+        filteredInstances.map(f => {
             f.dataValues.formName = f.dataValues.form.formName;
             delete f.dataValues.form;
             delete f.dataValues.processInstance;
             delete f.dataValues.user;
         });
 
-        return res.status(200).json(resBuilder.success(previousFormsInstances));
+        return res.status(200).json(resBuilder.success(filteredInstances));
     } catch (e) {
         logger.error(e);
         return res.status(500).json(resBuilder.error("Something went wrong, while getting all previous forms instances"));
@@ -259,6 +261,7 @@ router.post('/', async function (req, res, next) {
             await createFollowUpFormsInstances(form, formInstanceId, processStatus.dataValues.id, formSubmittedByUser, formData);
 
             return res.status(200).json(resBuilder.success(formInstance));
+
         } else if (!isFormStartingForm && processInstanceId) {
             let formInstances = await postgres.FormsInstances.entities({
                 formInstanceId: formInstanceId,
@@ -317,44 +320,12 @@ router.post('/', async function (req, res, next) {
 
             await formInstanceWithUserAccess.save();
 
-            const nextForms = await postgres.FormsDependencies.entities({prevFormId: formInstanceWithUserAccess.dataValues.formInstanceId});
-            const nextFormsIds = [];
-
-            for (let nextForm of nextForms) {
-                nextFormsIds.push(nextForm.formId);
-            }
-
-            const nextWaitingFormsIds = [];
-            for (let nextFormId of nextFormsIds) {
-                let isPrevFormsFilled = true;
-                const prevForms = await postgres.FormsDependencies.entities({formId: nextFormId});
-
-                for (let prevForm of prevForms) {
-                    const prevFormInstance = await postgres.FormsInstances.entities({
-                        formInstanceId: prevForm.dataValues.prevFormId,
-                        processInstanceId: processInstanceId
-                    });
-
-                    if (prevFormInstance.filter(f => f.dataValues.status !== formStatuses.FILLED).length !== 0) {
-                        isPrevFormsFilled = false;
-                        break;
-                    }
-                }
-
-                if (isPrevFormsFilled) {
-                    const nextForm = await postgres.FormsInstances.entity({
-                        formInstanceId: nextFormId,
-                        processInstanceId: processInstanceId
-                    });
-
-                    nextForm.status = formStatuses.WAITING;
-                    nextWaitingFormsIds.push({
-                        "formProcessId": nextForm.dataValues.id,
-                        "formInstanceId": nextForm.dataValues.formInstanceId,
-                    });
-                    await nextForm.save();
-                }
-            }
+            const nextWaitingFormsIds = await routeAfterFormFilled(
+                formInstanceWithUserAccess.dataValues.formInstanceId,
+                processInstanceId,
+                form.dataValues.processId,
+                formData
+            );
 
             try {
                 const storedUrl = formInstanceWithUserAccess.webhookUrl;
@@ -438,20 +409,84 @@ router.post('/webhookUrl', async function (req, res, next) {
     }
 });
 
+/* POST called by ProcessActionEndNode when an action workflow finishes */
+router.post('/actionComplete', async function (req, res) {
+    try {
+        const { formProcessId } = req.body;
+
+        if (!formProcessId) {
+            return res.status(400).json(resBuilder.fail('Bad request'));
+        }
+
+        const formInstance = await postgres.FormsInstances.findByPk(formProcessId);
+
+        if (!formInstance) {
+            return res.status(400).json(resBuilder.fail('Form instance not found'));
+        }
+
+        if (formInstance.status !== formStatuses.WAITING) {
+            return res.status(400).json(resBuilder.fail('Form instance is not in waiting state'));
+        }
+
+        formInstance.status = formStatuses.FILLED;
+        formInstance.formData = {};
+        await formInstance.save();
+
+        const processInstanceId = formInstance.processInstanceId;
+        const form = await postgres.Forms.entity({ id: formInstance.formId });
+
+        const nextWaitingFormsIds = await routeAfterFormFilled(
+            formInstance.formInstanceId,
+            processInstanceId,
+            form.dataValues.processId,
+            {}
+        );
+
+        for (const nextNode of nextWaitingFormsIds) {
+            try {
+                await axios.post(
+                    `${process.env.N8N_BASE_URL}webhook/${nextNode.formInstanceId}/start`,
+                    {
+                        isFirstNode: false,
+                        nextNodesIds: [{ formProcessId: nextNode.formProcessId, formInstanceId: nextNode.formInstanceId }],
+                        formData: {},
+                        formSubmittedByUser: null,
+                        formName: '',
+                        nextFormData: [],
+                        nextFormName: '',
+                    },
+                    {
+                        auth: {
+                            username: process.env.N8N_AUTH_USER,
+                            password: process.env.N8N_AUTH_PASSWORD,
+                        },
+                    }
+                );
+            } catch (e) {
+                logger.warn(`Failed to trigger n8n for form instance ${nextNode.formInstanceId}: ${e.message}`);
+            }
+        }
+
+        await isProcessFinished(processInstanceId);
+
+        return res.status(200).json(resBuilder.success({ ok: true }));
+    } catch (e) {
+        logger.error(e);
+        return res.status(500).json(resBuilder.error('Something went wrong while completing action'));
+    }
+});
+
 async function createFollowUpFormsInstances(form, formInstanceId, processStatusId, user, formData) {
     const processId = form.dataValues.processId;
 
     const processForms = await postgres.Forms.entities({processId: processId}, true);
 
     const nextForms = await postgres.FormsDependencies.entities({prevFormId: formInstanceId});
-
-    const nextFormIds = [];
-
-    for (let nextForm of nextForms) {
-        nextFormIds.push(nextForm.dataValues.formId);
-    }
+    const nextFormIds = nextForms.map(nf => nf.dataValues.formId);
 
     const nextNodesIds = [];
+    const blockedFormIds = [];
+
     for (let processForm of processForms) {
         if (processForm.dataValues.id === form.dataValues.id) {
             continue;
@@ -459,9 +494,35 @@ async function createFollowUpFormsInstances(form, formInstanceId, processStatusI
 
         let formStatus = formStatuses.INACTIVE;
 
-        let webhookUrl = "temp";
         if (nextFormIds.includes(processForm.dataValues.formId)) {
-            formStatus = formStatuses.WAITING;
+            const condResult = await evaluateConditions(
+                formInstanceId,
+                processForm.dataValues.formId,
+                processId,
+                formData
+            );
+            if (condResult !== 'blocked') {
+                formStatus = formStatuses.WAITING;
+            } else {
+                blockedFormIds.push(processForm.dataValues.formId);
+            }
+        }
+
+        if (processForm.formType === 'action') {
+            const newFormInstance = await postgres.FormsInstances.create({
+                formData: {},
+                formInstanceId: processForm.dataValues.formId,
+                status: formStatus,
+                formId: processForm.id,
+                webhookUrl: 'temp',
+                processInstanceId: processStatusId,
+                instanceAssigneeType: 'action',
+                assigneeId: [],
+            });
+            if (newFormInstance.dataValues.status === formStatuses.WAITING) {
+                await triggerActionWorkflow(newFormInstance, formData);
+            }
+            continue;
         }
 
         if (processForm.formAssigneeType === "role") {
@@ -471,17 +532,16 @@ async function createFollowUpFormsInstances(form, formInstanceId, processStatusI
                 : [];
 
             for (const resolvedUserId of resolvedUserIds) {
-                const newFormInstanceData = {
+                const newFormInstance = await postgres.FormsInstances.create({
                     formData: {},
                     formInstanceId: processForm.dataValues.formId,
                     status: formStatus,
                     formId: processForm.id,
-                    webhookUrl: webhookUrl,
+                    webhookUrl: 'temp',
                     processInstanceId: processStatusId,
                     instanceAssigneeType: "role",
                     assigneeId: [resolvedUserId],
-                };
-                const newFormInstance = await postgres.FormsInstances.create(newFormInstanceData);
+                });
                 if (newFormInstance.dataValues.status === formStatuses.WAITING) {
                     nextNodesIds.push({
                         "formProcessId": newFormInstance.dataValues.id,
@@ -507,18 +567,17 @@ async function createFollowUpFormsInstances(form, formInstanceId, processStatusI
                         break;
                 }
 
-                const newFormInstanceData = {
+                const newFormInstance = await postgres.FormsInstances.create({
                     formData: {},
                     formInstanceId: processForm.dataValues.formId,
                     status: formStatus,
                     formId: processForm.id,
-                    webhookUrl: webhookUrl,
+                    webhookUrl: 'temp',
                     processInstanceId: processStatusId,
                     instanceAssigneeType: processForm.formAssigneeType,
                     assigneeId: formAssigneeId,
-                }
+                });
 
-                const newFormInstance = await postgres.FormsInstances.create(newFormInstanceData);
                 if (newFormInstance.dataValues.status === formStatuses.WAITING) {
                     nextNodesIds.push({
                         "formProcessId": newFormInstance.dataValues.id,
@@ -531,6 +590,11 @@ async function createFollowUpFormsInstances(form, formInstanceId, processStatusI
             }
         }
     }
+
+    for (const blockedFormId of blockedFormIds) {
+        await skipFormAndDescendants(blockedFormId, processStatusId);
+    }
+
     const formToStart = await postgres.Forms.entity({formId: formInstanceId});
     const n8nWebhookUrl = `${process.env.N8N_BASE_URL}webhook/${formInstanceId}/start`;
     await axios.post(
@@ -555,11 +619,229 @@ async function createFollowUpFormsInstances(form, formInstanceId, processStatusI
 
 async function isProcessFinished(processInstanceId) {
     const forms = await postgres.FormsInstances.entities({processInstanceId: processInstanceId});
-    const isAnyFormsNotFilled = forms.filter(formInstance => formInstance.status !== formStatuses.FILLED);
-    if (isAnyFormsNotFilled.length === 0) {
+    const isAnyFormsNotDone = forms.filter(fi =>
+        fi.status !== formStatuses.FILLED && fi.status !== formStatuses.SKIPPED
+    );
+    if (isAnyFormsNotDone.length === 0) {
         const processInstance = await postgres.ProcessesInstances.entity({id: processInstanceId});
         processInstance.status = processInstances.ENDED;
         await processInstance.save();
+    }
+}
+
+async function routeAfterFormFilled(sourceFormId, processInstanceId, processId, formData) {
+    const nextDeps = await postgres.FormsDependencies.entities({ prevFormId: sourceFormId });
+    const nextWaitingFormsIds = [];
+    const blockedFormIds = [];
+
+    for (const dep of nextDeps) {
+        const nextFormId = dep.formId;
+
+        const condResult = await evaluateConditions(sourceFormId, nextFormId, processId, formData);
+
+        if (condResult === 'blocked') {
+            blockedFormIds.push(nextFormId);
+            continue;
+        }
+
+        const prevDeps = await postgres.FormsDependencies.entities({ formId: nextFormId });
+        let allPrevDone = true;
+
+        for (const prevDep of prevDeps) {
+            const prevInstances = await postgres.FormsInstances.entities({
+                formInstanceId: prevDep.dataValues.prevFormId,
+                processInstanceId,
+            });
+
+            const allDone = prevInstances.every(fi =>
+                fi.status === formStatuses.FILLED || fi.status === formStatuses.SKIPPED
+            );
+
+            if (!allDone) {
+                allPrevDone = false;
+                break;
+            }
+        }
+
+        if (!allPrevDone) continue;
+
+        const nextFormRecord = await postgres.Forms.entity({ formId: nextFormId }, true);
+        if (!nextFormRecord) continue;
+
+        if (nextFormRecord.formType === 'action') {
+            const nextFormInstance = await postgres.FormsInstances.entity({
+                formInstanceId: nextFormId,
+                processInstanceId,
+            });
+            if (nextFormInstance && nextFormInstance.status === formStatuses.INACTIVE) {
+                nextFormInstance.status = formStatuses.WAITING;
+                await nextFormInstance.save();
+                await triggerActionWorkflow(nextFormInstance, formData);
+            }
+        } else {
+            const nextFormInstances = await postgres.FormsInstances.entities({
+                formInstanceId: nextFormId,
+                processInstanceId,
+            });
+
+            if (nextFormInstances.length === 0 && nextFormRecord.formAssigneeType === 'role') {
+                const roleAssignee = nextFormRecord.FormsAssignees?.find(fa => fa.roleName);
+                if (roleAssignee) {
+                    const processInstance = await postgres.ProcessesInstances.entity({ id: processInstanceId });
+                    const initiatorUserId = processInstance?.initUserId;
+                    if (initiatorUserId) {
+                        const resolvedUserIds = await resolveRoleToUsers(roleAssignee.roleName, initiatorUserId);
+                        for (const resolvedUserId of resolvedUserIds) {
+                            const newInstance = await postgres.FormsInstances.create({
+                                formData: {},
+                                formInstanceId: nextFormId,
+                                status: formStatuses.WAITING,
+                                formId: nextFormRecord.id,
+                                webhookUrl: 'temp',
+                                processInstanceId,
+                                instanceAssigneeType: 'role',
+                                assigneeId: [resolvedUserId],
+                            });
+                            nextWaitingFormsIds.push({
+                                formProcessId: newInstance.dataValues.id,
+                                formInstanceId: newInstance.dataValues.formInstanceId,
+                            });
+                        }
+                    }
+                }
+            } else {
+                for (const nextFormInstance of nextFormInstances) {
+                    if (nextFormInstance.status === formStatuses.INACTIVE) {
+                        nextFormInstance.status = formStatuses.WAITING;
+                        await nextFormInstance.save();
+                        nextWaitingFormsIds.push({
+                            formProcessId: nextFormInstance.dataValues.id,
+                            formInstanceId: nextFormInstance.dataValues.formInstanceId,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    for (const blockedFormId of blockedFormIds) {
+        await skipFormAndDescendants(blockedFormId, processInstanceId);
+    }
+
+    return nextWaitingFormsIds;
+}
+
+async function evaluateConditions(sourceFormId, targetFormId, processId, formData) {
+    const allConditions = await postgres.FormConditions.entities({ processId, sourceFormId });
+
+    if (allConditions.length === 0) return 'unconditional';
+
+    const conditionForTarget = allConditions.find(c => c.targetFormId === targetFormId);
+
+    if (!conditionForTarget) {
+        const anyConditionalMatched = allConditions.some(c => checkCondition(c, formData));
+        return anyConditionalMatched ? 'blocked' : 'allowed';
+    }
+
+    return checkCondition(conditionForTarget, formData) ? 'allowed' : 'blocked';
+}
+
+function checkCondition(condition, formData) {
+    if (!Array.isArray(formData)) return false;
+
+    let fieldValue = undefined;
+    for (const group of formData) {
+        if (group[condition.fieldName] !== undefined) {
+            fieldValue = group[condition.fieldName].value;
+            break;
+        }
+    }
+
+    if (fieldValue === undefined || fieldValue === null) return false;
+
+    const strVal = String(fieldValue).toLowerCase().trim();
+    const expected = String(condition.expectedValue).toLowerCase().trim();
+
+    switch (condition.operator) {
+        case 'equals':      return strVal === expected;
+        case 'notEquals':   return strVal !== expected;
+        case 'contains':    return strVal.includes(expected);
+        case 'greaterThan': return Number(fieldValue) > Number(condition.expectedValue);
+        case 'lessThan':    return Number(fieldValue) < Number(condition.expectedValue);
+        default:            return false;
+    }
+}
+
+async function skipFormAndDescendants(formInstanceId, processInstanceId) {
+    const formInstances = await postgres.FormsInstances.entities({
+        formInstanceId,
+        processInstanceId,
+    });
+
+    let skippedAny = false;
+    for (const fi of formInstances) {
+        if (fi.status === formStatuses.INACTIVE) {
+            fi.status = formStatuses.SKIPPED;
+            await fi.save();
+            skippedAny = true;
+        }
+    }
+
+    if (!skippedAny) return;
+
+    const nextDeps = await postgres.FormsDependencies.entities({ prevFormId: formInstanceId });
+
+    for (const dep of nextDeps) {
+        const nextFormId = dep.formId;
+
+        const allPrevDeps = await postgres.FormsDependencies.entities({ formId: nextFormId });
+        let allPrevDone = true;
+
+        for (const prevDep of allPrevDeps) {
+            const prevInstances = await postgres.FormsInstances.entities({
+                formInstanceId: prevDep.dataValues.prevFormId,
+                processInstanceId,
+            });
+
+            const allDone = prevInstances.every(fi =>
+                fi.status === formStatuses.FILLED || fi.status === formStatuses.SKIPPED
+            );
+
+            if (!allDone) {
+                allPrevDone = false;
+                break;
+            }
+        }
+
+        if (allPrevDone) {
+            await skipFormAndDescendants(nextFormId, processInstanceId);
+        }
+    }
+}
+
+async function triggerActionWorkflow(formInstance, formData) {
+    try {
+        const url = `${process.env.N8N_BASE_URL}webhook/${formInstance.formInstanceId}/start`;
+        await axios.post(
+            url,
+            {
+                isFirstNode: false,
+                nextNodesIds: [{
+                    formProcessId: formInstance.dataValues.id,
+                    formInstanceId: formInstance.dataValues.formInstanceId,
+                }],
+                formData: formData || {},
+                formSubmittedByUser: null,
+            },
+            {
+                auth: {
+                    username: process.env.N8N_AUTH_USER,
+                    password: process.env.N8N_AUTH_PASSWORD,
+                }
+            }
+        );
+    } catch (e) {
+        logger.error(`Failed to trigger action workflow for ${formInstance.formInstanceId}: ${e.message}`);
     }
 }
 

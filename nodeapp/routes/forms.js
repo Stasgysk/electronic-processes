@@ -4,6 +4,7 @@
 let express = require('express');
 const routesUtils = require("../utils/RoutesUtils");
 const {Op} = require("sequelize");
+const processStatus = require('../enums/ProcessesStatuses');
 let router = express.Router();
 
 /* GET all forms */
@@ -33,12 +34,15 @@ router.get('/available', async function (req, res, next) {
         );
 
         let forms = await postgres.Forms.entities({isStartingNode: true}, true, null, length, offset);
-        forms = forms.filter(form => form.dataValues.FormsAssignees.some(fa => {
-            if (fa.userGroupId !== null && userGroupId !== null && fa.userGroupId === userGroupId) return true;
-            if (fa.userId !== null && fa.userId === req.userId) return true;
-            return !!(fa.roleName && userRoleNames.has(fa.roleName));
-
-        }));
+        forms = forms.filter(form => {
+            const process = form.dataValues.Processes;
+            if (!process || process.status !== processStatus.PUBLISHED) return false;
+            return form.dataValues.FormsAssignees.some(fa => {
+                if (fa.userGroupId !== null && userGroupId !== null && fa.userGroupId === userGroupId) return true;
+                if (fa.userId !== null && fa.userId === req.userId) return true;
+                return !!(fa.roleName && userRoleNames.has(fa.roleName));
+            });
+        });
 
         return res.status(200).json(resBuilder.success(forms));
     } catch (e) {
@@ -72,7 +76,8 @@ router.post('/', async function (req, res, next) {
     try {
         const {formName, formId, formData, processId, prevFormIds, userConfig} = req.body;
 
-        if(!formName || !formId || !formData || formData.length === 0 || !processId || !userConfig ) {
+        const isActionForm = userConfig?.type === 'action';
+        if(!formName || !formId || !formData || (!isActionForm && formData.length === 0) || !processId || !userConfig ) {
             logger.error("Required fields are not present");
             return res.status(400).json(resBuilder.fail("Bad request"));
         }
@@ -82,6 +87,9 @@ router.post('/', async function (req, res, next) {
         let users;
         let userEmails;
         let roleName;
+        let formType = "form";
+        let actionWorkflowNodes = null;
+
         switch (userConfig.type) {
             case "group":
                 userGroup = await postgres.UsersGroups.entity({name: userConfig.data.groupName});
@@ -108,6 +116,11 @@ router.post('/', async function (req, res, next) {
             case "role":
                 formAssigneeType = "role";
                 roleName = userConfig.data.roleName;
+                break;
+            case "action":
+                formAssigneeType = "action";
+                formType = "action";
+                actionWorkflowNodes = userConfig.data.actionWorkflowNodes || null;
                 break;
             default:
                 break;
@@ -159,9 +172,13 @@ router.post('/', async function (req, res, next) {
             ifFormExists.formData = formData;
             ifFormExists.isStartingNode = !prevFormIds;
             ifFormExists.formAssigneeType = formAssigneeType;
+            ifFormExists.formType = formType;
+            if (actionWorkflowNodes !== null) ifFormExists.actionWorkflowNodes = actionWorkflowNodes;
 
-            userEmails ? await createUsersDependencies(userEmails, ifFormExists.dataValues.id) : null;
-            await createFormsAssignees(ifFormExists.dataValues.id, users, userGroup?.id, roleName);
+            if (formType !== 'action') {
+                userEmails ? await createUsersDependencies(userEmails, ifFormExists.dataValues.id) : null;
+                await createFormsAssignees(ifFormExists.dataValues.id, users, userGroup?.id, roleName);
+            }
 
             await ifFormExists.save();
 
@@ -174,12 +191,16 @@ router.post('/', async function (req, res, next) {
                 processId: processId,
                 isStartingNode: !prevFormIds,
                 formAssigneeType: formAssigneeType,
+                formType: formType,
+                actionWorkflowNodes: actionWorkflowNodes,
             }
 
             const form = await postgres.Forms.create(newFormData);
 
-            userEmails ? await createUsersDependencies(userEmails, form.dataValues.id) : null;
-            await createFormsAssignees(form.dataValues.id, users, userGroup?.id, roleName);
+            if (formType !== 'action') {
+                userEmails ? await createUsersDependencies(userEmails, form.dataValues.id) : null;
+                await createFormsAssignees(form.dataValues.id, users, userGroup?.id, roleName);
+            }
 
             if(form) {
                 return res.status(200).json(resBuilder.success(form));

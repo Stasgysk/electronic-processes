@@ -7,6 +7,7 @@ let router = express.Router();
 const {
 	removeTempForms,
 	buildWorkflowData,
+	buildActionWorkflowData,
 	createWorkflow,
 	updateWorkflow,
 } = require('../services/n8nService');
@@ -58,30 +59,45 @@ router.get('/:id/:name', async function (req, res, next) {
 			return res.status(400).json(resBuilder.fail('Bad request'));
 		}
 
-		const prevNodeNames = [];
-		for (let prevNodeName in nodesConnections) {
-			for (let nodeConnections of nodesConnections[prevNodeName].main) {
-				for (let innerNodeConnection of nodeConnections) {
-					if (
-						innerNodeConnection.node === nodeName &&
-						!prevNodeNames.includes(innerNodeConnection.node)
-					) {
-						prevNodeNames.push(prevNodeName);
+		const transparentNodeTypes = ['CUSTOM.conditionalFormRouter'];
+
+		function resolvePrevNodeIds(targetName, allNodes, allConnections, visited = new Set()) {
+			if (visited.has(targetName)) return [];
+			visited.add(targetName);
+
+			const directPrevNames = [];
+			for (const prevName in allConnections) {
+				for (const outputConns of allConnections[prevName].main || []) {
+					for (const conn of outputConns) {
+						if (conn.node === targetName && !directPrevNames.includes(prevName)) {
+							directPrevNames.push(prevName);
+						}
 					}
 				}
 			}
+
+			const resolvedIds = [];
+			for (const prevName of directPrevNames) {
+				const prevNode = allNodes.find(n => n.name === prevName);
+				if (!prevNode) continue;
+				if (transparentNodeTypes.includes(prevNode.type)) {
+					resolvedIds.push(...resolvePrevNodeIds(prevName, allNodes, allConnections, visited));
+				} else {
+					resolvedIds.push(prevNode.id);
+				}
+			}
+			return resolvedIds;
 		}
 
 		let nodeId;
-		const prevNodeIds = [];
 		for (let node of nodes) {
 			if (node.name === nodeName) {
 				nodeId = node.id;
-			}
-			if (prevNodeNames.includes(node.name)) {
-				prevNodeIds.push(node.id);
+				break;
 			}
 		}
+
+		const prevNodeIds = resolvePrevNodeIds(nodeName, nodes, nodesConnections);
 
 		return res
 			.status(200)
@@ -129,6 +145,9 @@ router.post('/:id', async function (req, res, next) {
 		const filePath = path.join(__dirname, '..', 'workflows', 'processWorkflowTemplate.json');
 		let processWorkflowTemplateFile = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
+		const actionFilePath = path.join(__dirname, '..', 'workflows', 'actionWorkflowTemplate.json');
+		let actionWorkflowTemplateFile = JSON.parse(fs.readFileSync(actionFilePath, 'utf8'));
+
 		const templateWorkflow = await postgres.WorkflowEntities.entity({
 			name: processWorkflowTemplateFile.name,
 		});
@@ -136,32 +155,41 @@ router.post('/:id', async function (req, res, next) {
 			workflowId: templateWorkflow.id,
 		});
 
-		const folderId = nanoid(16);
+		const existingFolder = await postgres.Folder.findOne({
+			where: { name: foundProcess.name, projectId: templateSharedWorkflow.projectId },
+		});
+		const folderId = existingFolder ? existingFolder.id : nanoid(16);
+
 		for (let form of forms) {
-			const versionId = form.formId;
 			const workflowName = `${foundProcess.name}/${form.formName} process workflow`;
-			const existingWorkflow = await postgres.WorkflowEntities.entity({
-				name: workflowName,
-			});
+			const existingWorkflow = await postgres.WorkflowEntities.entity({ name: workflowName });
 
-			const { data: workflowData } = buildWorkflowData(
-				processWorkflowTemplateFile,
-				versionId,
-				foundProcess.name,
-				form.formName,
-				existingWorkflow,
-				processBuilderWorkflow
-			);
-
-			if (existingWorkflow) {
-				await updateWorkflow(existingWorkflow, workflowData);
-			} else {
-				await createWorkflow(
-					workflowData,
-					templateSharedWorkflow,
-					folderId,
+			if (form.formType === 'action') {
+				const { data: workflowData } = buildActionWorkflowData(
+					actionWorkflowTemplateFile,
+					form,
+					existingWorkflow,
 					foundProcess.name
 				);
+				if (existingWorkflow) {
+					await updateWorkflow(existingWorkflow, workflowData, templateSharedWorkflow, folderId, foundProcess.name);
+				} else {
+					await createWorkflow(workflowData, templateSharedWorkflow, folderId, foundProcess.name);
+				}
+			} else {
+				const { data: workflowData } = buildWorkflowData(
+					processWorkflowTemplateFile,
+					form.formId,
+					foundProcess.name,
+					form.formName,
+					existingWorkflow,
+					processBuilderWorkflow
+				);
+				if (existingWorkflow) {
+					await updateWorkflow(existingWorkflow, workflowData, templateSharedWorkflow, folderId, foundProcess.name);
+				} else {
+					await createWorkflow(workflowData, templateSharedWorkflow, folderId, foundProcess.name);
+				}
 			}
 		}
 

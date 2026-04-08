@@ -6,6 +6,7 @@ let express = require('express');
 let router = express.Router();
 const routesUtils = require("../utils/RoutesUtils");
 const processStatus = require('../enums/ProcessesStatuses');
+const {Op} = require("sequelize");
 
 /* GET all processes */
 router.get('/', async function (req, res, next) {
@@ -17,6 +18,77 @@ router.get('/', async function (req, res, next) {
     } catch (e) {
         logger.error(e);
         return res.status(500).json(resBuilder.error("Something went wrong, while getting all processes"));
+    }
+});
+
+/* GET all processes for admin with submission/awaiting counts */
+router.get('/admin', async function (req, res, next) {
+    try {
+        const processes = await postgres.Processes.findAll({
+            include: [
+                { model: postgres.ProcessesGroups, as: 'processGroup' },
+                { model: postgres.ProcessesTypes, as: 'processType' }
+            ],
+            order: [['updatedAt', 'DESC']],
+            paranoid: false
+        });
+
+        const enriched = await Promise.all(processes.map(async (p) => {
+            const submissionsCount = await postgres.ProcessesInstances.count({
+                where: { processId: p.id }
+            });
+
+            const piIds = (await postgres.ProcessesInstances.findAll({
+                where: { processId: p.id },
+                attributes: ['id'],
+                raw: true
+            })).map(pi => pi.id);
+
+            const awaitingCount = piIds.length > 0
+                ? await postgres.FormsInstances.count({
+                    where: { status: 'waiting', processInstanceId: { [Op.in]: piIds } }
+                })
+                : 0;
+
+            return { ...p.toJSON(), submissionsCount, awaitingCount };
+        }));
+
+        return res.status(200).json(resBuilder.success(enriched));
+    } catch (e) {
+        logger.error(e);
+        return res.status(500).json(resBuilder.error("Something went wrong while getting admin processes"));
+    }
+});
+
+/* PATCH update process status */
+router.patch('/:id/status', async function (req, res, next) {
+    try {
+        const processId = req.params.id;
+        const { status } = req.body;
+
+        const allowed = [processStatus.PUBLISHED, processStatus.UNPUBLISHED, processStatus.DELETED];
+        if (!status || !allowed.includes(status)) {
+            return res.status(400).json(resBuilder.fail("Invalid status value"));
+        }
+
+        const process = await postgres.Processes.findOne({ where: { id: processId }, paranoid: false });
+
+        if (!process) {
+            return res.status(404).json(resBuilder.fail("Process not found"));
+        }
+
+        if (status === processStatus.DELETED) {
+            await process.destroy();
+        } else {
+            process.status = status;
+            if (process.deletedAt) await process.restore();
+            await process.save();
+        }
+
+        return res.status(200).json(resBuilder.success({ id: processId, status }));
+    } catch (e) {
+        logger.error(e);
+        return res.status(500).json(resBuilder.error("Something went wrong while updating process status"));
     }
 });
 

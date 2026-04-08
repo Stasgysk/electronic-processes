@@ -127,6 +127,24 @@
     margin-bottom: 1rem;
 }
 
+.section-header {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    font-size: 1rem;
+    font-weight: 500;
+    margin: 0;
+}
+
+.section-header .arrow {
+    font-size: 0.75rem;
+    color: #5f6368;
+    margin-left: 0.5rem;
+    flex-shrink: 0;
+}
+
 @media (max-width: 640px) {
     .header-row {
         flex-direction: column;

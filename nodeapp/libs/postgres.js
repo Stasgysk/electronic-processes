@@ -22,6 +22,8 @@ const reconnectOptions = {
     }
 };
 
+const { seedOrgStructure } = require('../seeds/orgStructureSeed');
+
 const checkAndCreateDatabase = async (sequelize, databaseName) => {
     try {
         await sequelize.authenticate();
@@ -139,17 +141,9 @@ initDatabase().then(r => {
         });
     }
 
-    if (process.env.ORG_ROOT_NAME) {
-        db.OrgUnits.entity({ parentId: null, name: process.env.ORG_ROOT_NAME }).then(r => {
-            if (!r) {
-                db.OrgUnits.create({
-                    name: process.env.ORG_ROOT_NAME,
-                    type: process.env.ORG_ROOT_TYPE || null,
-                    parentId: null,
-                });
-            }
-        });
-    }
+    seedOrgStructure(db).catch(err => {
+        logger.error('Error seeding org structure:', err.message);
+    });
 
     const filePath = path.join(__dirname, '..', 'workflows', 'processWorkflowTemplate.json');
     let processWorkflowTemplateFile = JSON.parse(fs.readFileSync(filePath, 'utf8'));

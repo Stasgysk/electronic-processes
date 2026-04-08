@@ -37,15 +37,21 @@
       "dist/credentials/HttpBinApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/ExampleNode/ExampleNode.node.js",
-      "dist/nodes/HttpBin/HttpBin.node.js"
+      "dist/nodes/DynamicForm/DynamicForm.node.js",
+      "dist/nodes/FormStartNode/FormStartNode.node.js",
+      "dist/nodes/FormEndNode/FormEndNode.node.js",
+      "dist/nodes/FormInstanceStartNode/FormInstanceStartNode.node.js",
+      "dist/nodes/FormInstanceResumeNode/FormInstanceResumeNode.node.js",
+      "dist/nodes/ConditionalFormRouter/ConditionalFormRouter.node.js",
+      "dist/nodes/ProcessActionNode/ProcessActionNode.node.js",
+      "dist/nodes/ProcessActionEndNode/ProcessActionEndNode.node.js"
     ]
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.9.2",
     "@typescript-eslint/parser": "~8.32.0",
-    "eslint": "^8.57.0",
+    "eslint": "9.26.0",
     "eslint-plugin-n8n-nodes-base": "^1.16.3",
     "gulp": "^5.0.0",
     "prettier": "^3.5.3",
@@ -58,7 +64,7 @@
   "dependencies": {
     "@types/basic-auth": "^1.1.8",
     "isbot": "3.6.13",
-    "jsonwebtoken": "^9.0.2",
+    "jsonwebtoken": "9.0.3",
     "tmp-promise": "^3.0.3"
   }
 }

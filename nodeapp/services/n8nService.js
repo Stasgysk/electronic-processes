@@ -126,7 +126,10 @@ async function createWorkflow(workflowData, sharedWorkflowTemplate, folderId, pr
 		autosaved: false,
 	};
 
-	await postgres.WorkflowHistory.create(workflowHistoryData);
+	await postgres.WorkflowHistory.findOrCreate({
+		where: { versionId: workflowHistoryData.versionId },
+		defaults: workflowHistoryData,
+	});
 
 	const sharedWorkflowData = {
 		workflowId: workflowData.id,
@@ -177,7 +180,7 @@ function findConnectionsByNodeName(node, workflow) {
 	return connections[node.name];
 }
 
-async function updateWorkflow(existingWorkflow, workflowData) {
+async function updateWorkflow(existingWorkflow, workflowData, sharedWorkflowTemplate, folderId, processName) {
 	existingWorkflow.name = workflowData.name;
 	existingWorkflow.nodes = workflowData.nodes;
 	existingWorkflow.connections = workflowData.connections;
@@ -188,6 +191,38 @@ async function updateWorkflow(existingWorkflow, workflowData) {
 	existingWorkflow.parentFolder = workflowData.staticData;
 
 	await existingWorkflow.save();
+
+	await postgres.WorkflowHistory.findOrCreate({
+		where: { versionId: existingWorkflow.versionId },
+		defaults: {
+			versionId: existingWorkflow.versionId,
+			workflowId: existingWorkflow.id,
+			authors: 'system migration',
+			nodes: existingWorkflow.nodes,
+			connections: existingWorkflow.connections,
+			name: null,
+			autosaved: false,
+		},
+	});
+
+	const existingShared = await postgres.SharedWorkflow.entity({ workflowId: existingWorkflow.id });
+	if (!existingShared) {
+		const folder = await postgres.Folder.entity({ id: folderId });
+		if (!folder) {
+			await postgres.Folder.create({
+				id: folderId,
+				name: processName,
+				projectId: sharedWorkflowTemplate.projectId,
+			});
+		}
+
+		await postgres.SharedWorkflow.create({
+			workflowId: existingWorkflow.id,
+			projectId: sharedWorkflowTemplate.projectId,
+			role: sharedWorkflowTemplate.role,
+		});
+	}
+
 	await activateWorkflow(existingWorkflow.id);
 	logger.info(`Process Workflow updated: ${workflowData.name}`);
 }
@@ -212,9 +247,66 @@ async function activateWorkflow(workflowId) {
 	);
 }
 
+function buildActionWorkflowData(templateData, form, existingWorkflow, processName) {
+	const workflowId = existingWorkflow ? existingWorkflow.id : nanoid(16);
+	const workflowName = `${processName}/${form.formName} process workflow`;
+
+	let data = JSON.parse(JSON.stringify(templateData));
+	data.name = workflowName;
+	data.versionId = form.formId;
+	data.id = workflowId;
+
+	const actionPayload = form.actionWorkflowNodes || { firstNodeName: null, nodes: [], connections: {}, sourceFormName: null };
+	const actionNodes = actionPayload.nodes || [];
+	modifyNodes(actionNodes, 'action');
+	const actionConnections = actionPayload.connections || {};
+	const firstActionNodeName = actionPayload.firstNodeName || null;
+	const sourceFormName = actionPayload.sourceFormName || form.formName;
+
+	data.nodes = data.nodes.concat(actionNodes);
+	Object.assign(data.connections, actionConnections);
+
+	if (firstActionNodeName) {
+		for (const node of data.nodes) {
+			if (node.type === 'CUSTOM.formInstanceStartNode') {
+				if (!data.connections[node.name]) {
+					data.connections[node.name] = { main: [[], []] };
+				}
+				data.connections[node.name].main[0] = [{
+					node: firstActionNodeName,
+					type: 'main',
+					index: 0,
+				}];
+				break;
+			}
+		}
+	}
+
+	for (const node of data.nodes) {
+		node.id = uuidv4();
+		if (node.type === 'CUSTOM.formInstanceStartNode') {
+			const oldName = node.name;
+			node.name = sourceFormName;
+			node.webhookId = form.formId;
+			if (node.parameters && node.parameters.path !== undefined) {
+				node.parameters.path = form.formId;
+			}
+			if (data.connections[oldName]) {
+				data.connections[sourceFormName] = data.connections[oldName];
+				delete data.connections[oldName];
+			}
+		} else if (node.webhookId) {
+			node.webhookId = form.formId;
+		}
+	}
+
+	return { data, workflowId };
+}
+
 module.exports = {
 	removeTempForms,
 	buildWorkflowData,
+	buildActionWorkflowData,
 	createWorkflow,
 	updateWorkflow,
 	activateWorkflow,

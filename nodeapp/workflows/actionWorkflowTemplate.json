@@ -1,0 +1,58 @@
+{
+  "name": "ActionWorkflowTemplate",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "basicAuth"
+      },
+      "type": "CUSTOM.formInstanceStartNode",
+      "typeVersion": 1,
+      "position": [48, -64],
+      "id": "aa11bb22-cc33-dd44-ee55-ff6677889900",
+      "name": "Spúšťač inštancie formulára",
+      "webhookId": "11223344-5566-7788-99aa-bbccddeeff00",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "psgf0RRixXJNYGmq",
+          "name": "FormsCreds"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "CUSTOM.processActionEndNode",
+      "typeVersion": 1,
+      "position": [272, 48],
+      "id": "bb22cc33-dd44-ee55-ff66-778899aabbcc",
+      "name": "Koniec akcie"
+    }
+  ],
+  "connections": {
+    "Spúšťač inštancie formulára": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Koniec akcie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "versionId": "action-template-v1",
+  "triggerCount": 1,
+  "id": "actionWorkflowTemplateId",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "parentFolderId": null,
+  "isArchived": false
+}

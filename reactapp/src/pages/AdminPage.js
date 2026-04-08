@@ -5,6 +5,7 @@ import { getOrgUnitsTree, getOrgUnitsFlat, createOrgUnit, updateOrgUnit, deleteO
 import { getOrgRoles, createOrgRole, updateOrgRole, deleteOrgRole } from '../api/orgRoles.service';
 import { assignUserToRole, removeUserFromRole } from '../api/userOrgRoles.service';
 import { getSemesters, createSemester, deleteSemester, activateSemester, previewTransition, transitionStudents, copyProfessors } from '../api/semesters.service';
+import { getAdminProcesses, updateProcessStatus } from '../api/processes.service';
 import './AdminPage.css';
 
 function TreeNode({ unit, selectedId, onSelect, onAddChild, onDelete, onClone, onTogglePickable, depth = 0 }) {
@@ -1002,6 +1003,93 @@ function SemesterPanel() {
     );
 }
 
+function ProcessesPanel() {
+    const { t } = useTranslation();
+    const [processes, setProcesses] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await getAdminProcesses();
+            setProcesses(res.data || []);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const handleStatus = async (id, status) => {
+        if (status === 'deleted' && !window.confirm(t('deleteProcessConfirm'))) return;
+        try {
+            await updateProcessStatus(id, status);
+            load();
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const statusBadge = (status) => {
+        if (status === 'published') return <Badge bg="success">{t('published')}</Badge>;
+        if (status === 'deleted') return <Badge bg="danger">{t('deleted')}</Badge>;
+        return <Badge bg="secondary">{t('hidden')}</Badge>;
+    };
+
+    if (loading) return <div className="loading-center"><Spinner /></div>;
+
+    return (
+        <div className="processes-panel">
+            {processes.length === 0 ? (
+                <p className="no-content-hint">{t('noProcesses')}</p>
+            ) : (
+                <table className="processes-table">
+                    <thead>
+                        <tr>
+                            <th>{t('processName')}</th>
+                            <th>{t('processGroup')}</th>
+                            <th>{t('processType')}</th>
+                            <th>{t('processStatus')}</th>
+                            <th>{t('submissions')}</th>
+                            <th>{t('awaiting')}</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {processes.map(p => (
+                            <tr key={p.id}>
+                                <td>{p.name}</td>
+                                <td>{p.processGroup?.name || '—'}</td>
+                                <td>{p.processType?.name || '—'}</td>
+                                <td>{statusBadge(p.status)}</td>
+                                <td>{p.submissionsCount}</td>
+                                <td>{p.awaitingCount}</td>
+                                <td className="processes-actions">
+                                    {p.status !== 'published' && p.deletedAt === null && (
+                                        <Button size="sm" variant="outline-success" onClick={() => handleStatus(p.id, 'published')}>
+                                            {t('publish')}
+                                        </Button>
+                                    )}
+                                    {p.status === 'published' && (
+                                        <Button size="sm" variant="outline-secondary" onClick={() => handleStatus(p.id, 'unpublished')}>
+                                            {t('hide')}
+                                        </Button>
+                                    )}
+                                    <Button size="sm" variant="outline-danger" onClick={() => handleStatus(p.id, 'deleted')}>
+                                        {t('deleteProcess')}
+                                    </Button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+        </div>
+    );
+}
+
 export default function AdminPage() {
     const { t } = useTranslation();
     const [tree, setTree] = useState([]);
@@ -1063,7 +1151,7 @@ export default function AdminPage() {
             <div className="admin-topbar">
                 <h3>{t('adminPanel')}</h3>
                 <div className="admin-tabs">
-                    {[['org', 'orgStructureRoles'], ['users', 'userAssignments'], ['semesters', 'semestres']].map(([key, label]) => (
+                    {[['org', 'orgStructureRoles'], ['users', 'userAssignments'], ['semesters', 'semestres'], ['processes', 'processManagement']].map(([key, label]) => (
                         <button key={key} className={`admin-tab${activeTab === key ? ' active' : ''}`} onClick={() => setActiveTab(key)}>
                             {t(label)}
                         </button>
@@ -1118,6 +1206,12 @@ export default function AdminPage() {
             {activeTab === 'semesters' && (
                 <div className="admin-layout single">
                     <SemesterPanel />
+                </div>
+            )}
+
+            {activeTab === 'processes' && (
+                <div className="admin-layout single">
+                    <ProcessesPanel />
                 </div>
             )}
 
