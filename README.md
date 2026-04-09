@@ -15,28 +15,31 @@
 - [Project Structure](#project-structure)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
-    - [Environment Variables for `nodeapp`](#environment-variables-for-nodeapp)
-    - [Environment Variables for `n8n`/PostgreSQL](#environment-variables-for-n8npostgresql)
+    - [Environment Variables — `nodeapp`](#environment-variables--nodeapp)
+    - [Environment Variables — `n8n` / PostgreSQL](#environment-variables--n8n--postgresql)
 - [Running the Project](#running-the-project)
-    - [Run the Backend](#run-the-backend)
-    - [Run n8n + PostgreSQL (Docker)](#run-n8n--postgresql-docker)
-    - [Deploy Custom Nodes to n8n](#deploy-custom-nodes-to-n8n)
-- [Backend API (Examples)](#backend-api-examples)
-- [Working with Custom Nodes](#working-with-custom-nodes)
-- [Logging & Diagnostics](#logging--diagnostics)
+- [Components](#components)
+    - [nodeapp — Express Backend](#nodeapp--express-backend)
+    - [reactapp — React Frontend](#reactapp--react-frontend)
+    - [n8n — Workflow Automation](#n8n--workflow-automation)
+- [Testing](#testing)
 - [License](#license)
 
 ---
 
 ## Overview
 
-This project comprises two main components:
+A university information system that replaces paper-based administrative processes at TUKE. Students and staff fill out digital forms (e.g. individual study plans, scholarship requests), which are routed through configurable approval workflows.
 
-1. **Node.js Backend (**`nodeapp`**)** — A REST/HTTP service that:
-    - Handles requests from external clients or systems.
-    - Communicates with n8n via HTTP API or webhooks.
-    - Stores events and results in a PostgreSQL database.
-2. **n8n + PostgreSQL** — A workflow automation platform with data persistence in PostgreSQL, deployed via Docker. Includes a `deploy_node.sh` script for uploading and updating custom n8n nodes.
+The system consists of three components:
+
+| Component | Description | Port |
+|-----------|-------------|------|
+| `nodeapp` | Express.js REST API backend | 4000 (HTTPS) |
+| `reactapp` | React 19 frontend | 3000 |
+| `n8n` | Workflow automation with custom nodes | 5678 |
+
+All components share a PostgreSQL database.
 
 ---
 
@@ -44,10 +47,12 @@ This project comprises two main components:
 
 ```mermaid
 flowchart LR
-    Client[Client / Integrations] -- HTTP/JSON --> NodeApp[Node.js Backend]
-    NodeApp -- Webhook/API --> N8N[n8n]
-    N8N --- PG[(PostgreSQL)]
-    NodeApp --- PG
+    User[User / Browser] -- HTTPS --> React[React Frontend :3000]
+    React -- REST API --> NodeApp[Express Backend :4000]
+    NodeApp -- Webhook / API --> N8N[n8n :5678]
+    N8N -- x-service-auth --> NodeApp
+    NodeApp --- PG[(PostgreSQL)]
+    N8N --- PG
 
     subgraph Docker
       NodeApp
@@ -56,105 +61,172 @@ flowchart LR
     end
 ```
 
+**Authentication flow:** TUKE KPI SSO (OAuth2/OpenID Connect) → session cookie + CSRF token stored in DB.
+
+**Service-to-service auth:** n8n calls backend using `x-service-auth` header with a shared `INTERNAL_SECRET`.
+
 ---
 
 ## Project Structure
 
 ```
-project-root/
+electronic-processes/
 │
-├─ nodeapp/                     # Node.js backend
-│  ├─ bin/www                   # Starts HTTP server
-│  ├─ config/config.example.js  # Example config
-│  ├─ enums/                    # App enums
-│  ├─ libs/                     # App libs
-│  ├─ models/                   # DB models
-│  ├─ routes/                   # App routes
-│  ├─ utils/                    # App utils
-│  ├─ workflows/                # N8N workflow templates
-│  ├─ app.js/                   # App main script
-│  ├─ server.js/                # App server start
-│  ├─ package.json              # Dependencies and scripts
-│  ├─ docker-compose.yml        # Node.js configuration
-│  └─ ...
+├── nodeapp/                        # Express.js backend (Node.js)
+│   ├── routes/                     # REST API routes
+│   │   ├── auth.js                 # OAuth2 SSO login/logout
+│   │   ├── users.js                # User management
+│   │   ├── usersGroups.js          # User groups (STUDENT, PROFESSOR, STAFF, ...)
+│   │   ├── forms.js                # Form templates CRUD
+│   │   ├── formsInstances.js       # Form submissions and lifecycle
+│   │   ├── formConditions.js       # Conditional form routing
+│   │   ├── processes.js            # Process definitions
+│   │   ├── processesInstances.js   # Running process instances
+│   │   ├── orgUnits.js             # Organisational units tree
+│   │   ├── orgRoles.js             # Roles within org units
+│   │   ├── userOrgRoles.js         # User ↔ role assignments
+│   │   ├── userWorkplaces.js       # User workplace assignments
+│   │   ├── semesters.js            # Semester management
+│   │   └── n8n.js                  # n8n webhook integration
+│   ├── models/
+│   │   ├── users/                  # Users, Sessions, Groups, OrgUnits, OrgRoles, Semesters
+│   │   └── processes/              # Forms, FormsInstances, Processes, ProcessesInstances, FormConditions
+│   ├── utils/
+│   │   ├── AuthWrapper.js          # Session + internal secret middleware
+│   │   ├── ResponseBuilder.js      # Unified API response format
+│   │   ├── Logger.js               # Log-level-aware logger with sensitive data masking
+│   │   ├── RoutesUtils.js          # Query param helpers (eager, length, offset, lan)
+│   │   ├── UserUtils.js            # Session expiry, role/org auto-assignment
+│   │   └── UserSessionCleanupUtil.js # Cron job: removes expired sessions nightly
+│   ├── services/
+│   │   └── n8nService.js           # n8n API client
+│   ├── seeds/
+│   │   └── orgStructureSeed.js     # Example org structure seed
+│   ├── tests/
+│   │   ├── setup.js                # Global jest setup (mocks for globals)
+│   │   ├── unit/                   # Unit tests (ResponseBuilder, Logger, UserUtils, RoutesUtils)
+│   │   └── integration/            # Integration tests with supertest (formConditions, authWrapper)
+│   ├── workflows/                  # n8n workflow JSON templates
+│   ├── app.js                      # Express app setup
+│   ├── server.js                   # HTTPS server entry point
+│   └── package.json
 │
-├─ n8n/                     # n8n environment + custom nodes
-│  ├─ docker-compose.yml    # n8n + PostgreSQL configuration
-│  ├─ nodes/                # Custom n8n nodes
-│  └─ deploy_node.sh        # Script to deploy custom nodes
+├── reactapp/                       # React 19 frontend
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── LandingPage.js      # App entry / login
+│   │   │   ├── FormsPage.js        # Available, awaiting, and filled forms
+│   │   │   ├── ProfilePage.js      # User profile
+│   │   │   └── AdminPage.js        # Admin panel (STAFF only)
+│   │   ├── components/             # Shared UI components (Header, Forms, GroupSelector, ...)
+│   │   ├── api/                    # Axios API service modules
+│   │   ├── contexts/               # React context providers
+│   │   ├── hooks/                  # Custom React hooks
+│   │   ├── i18n/                   # Translations (EN / SK)
+│   │   └── utils/                  # Frontend utilities
+│   └── package.json
 │
-└─ README.md
+├── n8n/                            # n8n custom nodes package (TypeScript)
+│   ├── nodes/
+│   │   ├── DynamicForm/            # Renders form fields, supports group/individual/role assignees
+│   │   ├── FormStartNode/          # Starts a process workflow
+│   │   ├── FormEndNode/            # Ends a process workflow
+│   │   ├── FormInstanceStartNode/  # Starts a specific form instance
+│   │   ├── FormInstanceResumeNode/ # Resumes a paused form instance
+│   │   ├── ConditionalFormRouter/  # Routes to next form based on field conditions
+│   │   ├── ProcessActionNode/      # Executes an administrative action in a process
+│   │   └── ProcessActionEndNode/   # Ends a process action node
+│   ├── deploy_node.sh              # Uploads compiled nodes to n8n container and restarts it
+│   └── package.json
+│
+└── README.md
 ```
 
 ---
 
 ## Quick Start
 
-1. **Prepare environment variables**:
+1. **Copy environment files:**
 
    ```bash
    cp nodeapp/.env.example nodeapp/.env
    cp n8n/.env.example n8n/.env
    ```
 
-2. **Start n8n + PostgreSQL (Docker)**:
+2. **Start PostgreSQL + n8n (Docker):**
 
    ```bash
    cd n8n
    docker-compose up -d
    ```
 
-3. **Run the backend Node.js**:
+3. **Start the backend:**
 
    ```bash
-   cd ../nodeapp
+   cd nodeapp
    docker-compose up -d
    ```
 
-- **n8n default URL**: `http://localhost:5678`
-- **Backend default URL**: `http://localhost:3000`
+4. **Start the frontend (dev):**
+
+   ```bash
+   cd reactapp
+   npm install
+   npm start
+   ```
+
+- React frontend: `http://localhost:3000`
+- Express backend: `https://localhost:4000`
+- n8n editor: `http://localhost:5678`
 
 ---
 
 ## Configuration
 
-### Environment Variables for `nodeapp`
+### Environment Variables — `nodeapp`
 
 Create `nodeapp/.env`:
 
-```
-#  Can be set from the list: dev, test, prod.
-NODE_ENV=
+```env
+# dev | test | prod
+NODE_ENV=dev
 
-DB_PROVIDER=
+LOG_LEVEL=info
 
-LOG_LEVEL=
+# Set true to drop and recreate tables on startup (never in prod)
+FORCE_SYNC_DB=false
+# Comma-separated DB names to skip force sync (e.g. n8n)
+NO_FORCE_SYNC_DB=n8n
 
-# FORCE_SYNC_DB should be false for prod env
-FORCE_SYNC_DB=
-NO_FORCE_SYNC_DB=
+# Enable session-based auth middleware
+API_AUTH=true
 
-TUKE_SSO2_ACCESS_TOKEN=
+# Shared secret for n8n → backend service calls
+INTERNAL_SECRET=
+
+# TUKE SSO OAuth2
+TUKE_SSO2_CLIENT_ID=
+TUKE_SSO2_CLIENT_SECRET=
+TUKE_SSO2_REDIRECT_URI=
+
+# Default user groups to seed on startup
 TUKE_USER_GROUPS=STUDENT,DOCTORAL,PROFESSOR,STAFF
 
+# n8n connection
 N8N_API_KEY=
-N8N_CONTAINER_NAME=
-N8N_BASE_URL=
+N8N_BASE_URL=http://localhost:5678
 N8N_AUTH_USER=
 N8N_AUTH_PASSWORD=
-N8N_API_USER_EMAIL=
-N8N_API_USER_PASSWORD=
 ```
 
-### Environment Variables for `n8n`/PostgreSQL
+### Environment Variables — `n8n` / PostgreSQL
 
-Set in `n8n/.env`:
+Create `n8n/.env`:
 
-```
-# ENV VARIABLES
+```env
 IS_PROD=false
 
-# DB
+# PostgreSQL
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_DB=n8n
@@ -166,60 +238,105 @@ N8N_BASIC_AUTH_USER=admin
 N8N_BASIC_AUTH_PASSWORD=adminpassword
 N8N_ENCRYPTION_KEY=supersecretkey
 N8N_EDITOR_BASE_URL=http://localhost:5678
-
 ```
 
 ---
 
 ## Running the Project
 
-### Run the Backend
+### Backend
 
 ```bash
 cd nodeapp
-docker-compose up -d
+npm start                  # production
+npx nodemon server.js      # development (auto-restart)
+docker-compose up -d       # via Docker
 ```
 
-### Run n8n + PostgreSQL (Docker)
+### n8n + PostgreSQL
 
 ```bash
 cd n8n
 docker-compose up -d
 ```
 
-n8n will be accessible at `http://localhost:5678`.
-
-### Deploy Custom Nodes to n8n
+### Deploy Custom n8n Nodes
 
 ```bash
 cd n8n
-./deploy_node.sh
+npm run build              # compile TypeScript → dist/
+./deploy_node.sh           # upload to running n8n container and restart
 ```
 
-This script uploads custom nodes to the n8n container and restarts it.
+### Frontend
+
+```bash
+cd reactapp
+npm start                  # dev server on :3000
+npm run build              # production build
+```
 
 ---
 
-## Backend API (Examples)
+## Components
 
-// TO DO
+### nodeapp — Express Backend
+
+- **REST API** with routes for users, forms, processes, org structure, semesters
+- **Role system**: organisational units (tree structure) + roles within units; users are auto-assigned roles based on email patterns
+- **Semester management**: transition students between org units when a new semester is activated; copy professor assignments
+- **Form conditions**: conditional routing between forms within a process based on field values
+- **Session auth**: cookie-based sessions with CSRF tokens; nightly cleanup cron job
+- **Workflow generation**: process workflow JSON is generated programmatically and inserted into the n8n database directly
+
+### reactapp — React Frontend
+
+- **FormsPage**: three tabs — available forms to fill, forms awaiting your approval, previously filled forms
+- **AdminPage** (STAFF only): manage organisational unit tree, assign roles to units, assign users to roles and workplaces, manage semesters and process activation
+- **i18n**: English and Slovak via `react-i18next`
+- **SSO login**: redirects to TUKE KPI OAuth2 provider
+
+### n8n — Workflow Automation
+
+Custom nodes available in the n8n editor:
+
+| Node | Description |
+|------|-------------|
+| `DynamicForm` | Renders form to an assignee; supports `group`, `individual_emails`, `shared_emails`, and `role` assignee types |
+| `FormStartNode` | Entry point — starts a new process instance |
+| `FormEndNode` | Marks the process as completed |
+| `FormInstanceStartNode` | Activates a specific form instance |
+| `FormInstanceResumeNode` | Resumes a form instance after external action |
+| `ConditionalFormRouter` | Routes to different next forms based on a field value condition |
+| `ProcessActionNode` | Triggers an administrative action within a process |
+| `ProcessActionEndNode` | Ends a process action step |
 
 ---
 
-## Working with Custom Nodes
+## Testing
 
-Custom nodes are stored in `n8n/nodes/`. To add or update nodes:
+Tests are located in `nodeapp/tests/` and run with Jest.
 
-1. Place node files in `n8n/nodes/customNode`.
-2. Run `./deploy_node.sh` to upload and apply changes.
-3. Verify nodes in the n8n UI under the nodes panel.
+```bash
+cd nodeapp
+npm test
+```
 
----
+### Unit tests (`tests/unit/`)
 
-## Logging & Diagnostics
+| File | What is tested |
+|------|----------------|
+| `ResponseBuilder.test.js` | `success()`, `error()`, `fail()` responses |
+| `Logger.test.js` | Log level filtering, base64 masking, sensitive field sanitization |
+| `UserUtils.test.js` | `isSessionExpired()` including boundary cases |
+| `RoutesUtils.test.js` | `getDefaultRequestParams()` — eager, length, offset, language |
 
-- **Backend logs**: Written to console.
-- **n8n logs**: Available via `docker logs n8n`.
+### Integration tests (`tests/integration/`)
+
+| File | What is tested |
+|------|----------------|
+| `formConditions.test.js` | POST create/update condition, GET by processId, 400/500 error handling |
+| `authWrapper.test.js` | Internal secret auth, excluded routes, session validation, expired sessions |
 
 ---
 
