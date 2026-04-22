@@ -39,7 +39,8 @@ router.get('/:id', async function (req, res, next) {
 	}
 });
 
-/* GET n8n node id and previous node ids, by workflow id and node name */
+// returns the DB id of a node and a comma-separated list of the ids of its direct predecessors;
+// called by DynamicForm / ProcessActionNode during the setup run so they know their prevNodeIds
 router.get('/:id/:name', async function (req, res, next) {
 	try {
 		const workflowEntityId = req.params.id;
@@ -59,8 +60,12 @@ router.get('/:id/:name', async function (req, res, next) {
 			return res.status(400).json(resBuilder.fail('Bad request'));
 		}
 
+		// these node types are routing-only and should be skipped when resolving predecessors;
+		// we want the real form node id, not the router that sits between two forms
 		const transparentNodeTypes = ['CUSTOM.conditionalFormRouter'];
 
+		// walks backwards through the connection graph, skipping transparent nodes,
+		// and returns the IDs of the nearest non-transparent predecessors
 		function resolvePrevNodeIds(targetName, allNodes, allConnections, visited = new Set()) {
 			if (visited.has(targetName)) return [];
 			visited.add(targetName);
@@ -81,6 +86,7 @@ router.get('/:id/:name', async function (req, res, next) {
 				const prevNode = allNodes.find(n => n.name === prevName);
 				if (!prevNode) continue;
 				if (transparentNodeTypes.includes(prevNode.type)) {
+					// transparent node: recurse further back
 					resolvedIds.push(...resolvePrevNodeIds(prevName, allNodes, allConnections, visited));
 				} else {
 					resolvedIds.push(prevNode.id);
@@ -114,7 +120,8 @@ router.get('/:id/:name', async function (req, res, next) {
 	}
 });
 
-/* POST create workflow for each formStatus */
+// called by the FormEndNode n8n node when the process setup run finishes;
+// generates a per-form-instance workflow for every registered form step
 router.post('/:id', async function (req, res, next) {
 	try {
 		const processId = req.params.id;
@@ -135,6 +142,8 @@ router.post('/:id', async function (req, res, next) {
 
 		const processBuilderWorkflow = await postgres.WorkflowEntities.entity({ id: workflowId });
 
+		// placeholder forms were created so FK constraints hold when nodes register out of order;
+		// clean them up now that the full setup run is complete
 		const areTempForms = forms.filter((f) => f.dataValues.formName === 'TempName');
 		forms = forms.filter((f) => f.dataValues.formName !== 'TempName');
 
@@ -148,6 +157,7 @@ router.post('/:id', async function (req, res, next) {
 		const actionFilePath = path.join(__dirname, '..', 'workflows', 'actionWorkflowTemplate.json');
 		let actionWorkflowTemplateFile = JSON.parse(fs.readFileSync(actionFilePath, 'utf8'));
 
+		// all generated workflows land in the same n8n project as the template
 		const templateWorkflow = await postgres.WorkflowEntities.entity({
 			name: processWorkflowTemplateFile.name,
 		});
@@ -155,6 +165,7 @@ router.post('/:id', async function (req, res, next) {
 			workflowId: templateWorkflow.id,
 		});
 
+		// group workflows under a folder named after the process for easier navigation in n8n UI
 		const existingFolder = await postgres.Folder.findOne({
 			where: { name: foundProcess.name, projectId: templateSharedWorkflow.projectId },
 		});
@@ -165,6 +176,7 @@ router.post('/:id', async function (req, res, next) {
 			const existingWorkflow = await postgres.WorkflowEntities.entity({ name: workflowName });
 
 			if (form.formType === 'action') {
+				// action form: build a standalone automation workflow (no user interaction)
 				const { data: workflowData } = buildActionWorkflowData(
 					actionWorkflowTemplateFile,
 					form,
@@ -177,6 +189,7 @@ router.post('/:id', async function (req, res, next) {
 					await createWorkflow(workflowData, templateSharedWorkflow, folderId, foundProcess.name);
 				}
 			} else {
+				// regular form: build an instance workflow based on the process template
 				const { data: workflowData } = buildWorkflowData(
 					processWorkflowTemplateFile,
 					form.formId,

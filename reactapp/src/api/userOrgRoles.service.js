@@ -1,3 +1,10 @@
+// UserOrgRole API calls — the join table between users and org roles.
+//
+// getMyRoles       — returns the current user's role assignments (used in ProfilePage).
+// getUserOrgRoles  — admin lookup: all assignments, filterable by params.
+// assignUserToRole — admin-side assignment (no access code needed).
+// joinRole         — self-service: user submits orgRoleId + access code.
+// removeUserFromRole — leave a role by assignment id.
 import gsAxios from "./gsAxios";
 
 export const getMyRoles = () =>

@@ -50,7 +50,7 @@ router.put('/:id', async function (req, res) {
     }
 });
 
-/* DELETE semester */
+/* DELETE semester — the current semester cannot be deleted */
 router.delete('/:id', async function (req, res) {
     try {
         const semester = await postgres.Semesters.entity({ id: parseInt(req.params.id) });
@@ -64,7 +64,7 @@ router.delete('/:id', async function (req, res) {
     }
 });
 
-/* POST activate semester */
+// marks the given semester as current and clears the flag from all others
 router.post('/:id/activate', async function (req, res) {
     try {
         const semester = await postgres.Semesters.entity({ id: parseInt(req.params.id) });
@@ -79,7 +79,8 @@ router.post('/:id/activate', async function (req, res) {
     }
 });
 
-/* GET transition preview */
+// returns a summary of what will happen when the transition is executed:
+// how many students advance, how many graduate, how many professors will be copied
 router.get('/:id/transition/preview', async function (req, res) {
     try {
         const { fromSemesterId } = req.query;
@@ -92,7 +93,8 @@ router.get('/:id/transition/preview', async function (req, res) {
     }
 });
 
-/* POST transition students to new semester */
+// moves student role assignments from one semester to the next.
+// if it's a year transition (summer -> winter), students are advanced to the next year role.
 router.post('/:id/transition/students', async function (req, res) {
     try {
         const { fromSemesterId } = req.body;
@@ -105,7 +107,7 @@ router.post('/:id/transition/students', async function (req, res) {
     }
 });
 
-/* POST copy professor assignments to new semester */
+// copies professor role assignments as-is from the old semester to the new one
 router.post('/:id/copy-professors', async function (req, res) {
     try {
         const { fromSemesterId } = req.body;
@@ -118,7 +120,7 @@ router.post('/:id/copy-professors', async function (req, res) {
     }
 });
 
-async function getStudentAssignments(semesterId) {
+function getStudentAssignments(semesterId) {
     return postgres.UserOrgRoles.findAll({
         where: { semesterId },
         include: [{
@@ -131,7 +133,7 @@ async function getStudentAssignments(semesterId) {
     });
 }
 
-async function getProfessorAssignments(semesterId) {
+function getProfessorAssignments(semesterId) {
     return postgres.UserOrgRoles.findAll({
         where: { semesterId },
         include: [{
@@ -143,6 +145,10 @@ async function getProfessorAssignments(semesterId) {
     });
 }
 
+// figures out where a student goes next semester.
+// if it's a semester transition (not year), they stay in the same role.
+// if it's a year transition, we look for the role with sortOrder+1 in the same parent unit.
+// if no such role exists, the student graduates and is dropped.
 async function resolveNextRole(currentRole, isYearTransition) {
     if (!isYearTransition) return { type: 'same' };
     if (currentRole.sortOrder === null || currentRole.sortOrder === undefined) return { type: 'graduate' };
@@ -166,6 +172,7 @@ async function buildTransitionPreview(fromSemesterId, toSemesterId) {
     const toSemester = await postgres.Semesters.entity({ id: toSemesterId });
     if (!fromSemester || !toSemester) throw new Error("Semester not found");
 
+    // year transition only happens when going from summer to winter semester
     const isYearTransition = fromSemester.type === 'LETNY' && toSemester.type === 'ZIMNY';
     const studentAssignments = await getStudentAssignments(fromSemesterId);
 
@@ -204,6 +211,8 @@ async function executeStudentTransition(fromSemesterId, toSemesterId) {
             continue;
         }
         const newOrgRoleId = resolution.type === 'advance' ? resolution.nextOrgRoleId : assignment.orgRoleId;
+
+        // skip if the assignment already exists in the target semester
         const existing = await postgres.UserOrgRoles.findOne({
             where: { userId: assignment.userId, orgRoleId: newOrgRoleId, semesterId: toSemesterId },
         });
@@ -217,6 +226,7 @@ async function executeStudentTransition(fromSemesterId, toSemesterId) {
             });
         }
 
+        // when advancing a year, also update the user's primary org unit to the new year's unit
         if (resolution.type === 'advance') {
             const newOrgRole = await postgres.OrgRoles.findOne({ where: { id: newOrgRoleId } });
             if (newOrgRole?.orgUnitId) {

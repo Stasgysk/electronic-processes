@@ -1,3 +1,12 @@
+// OrgUnit API calls — the organisational hierarchy (university > faculty > department > year).
+//
+// getOrgUnitsTree    — returns the nested tree structure (used by admin panel tree view).
+// getOrgUnitsFlat    — flat array of all units (used by OnboardingModal CascadingUnitPicker).
+// getAllUsers        — returns all users with their workplace/org assignments; filterable.
+// addUserWorkplace / removeUserWorkplace — admin management of which units a user belongs to.
+// searchUsers        — email-based search, used when assigning users to roles/processes.
+// assignUserOrgUnit  — admin: sets a user's primary org unit directly.
+// createOrgUnit / updateOrgUnit / cloneOrgUnit / deleteOrgUnit — admin CRUD.
 import gsAxios from "./gsAxios";
 
 export const getOrgUnitsTree = () =>

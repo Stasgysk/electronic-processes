@@ -12,6 +12,8 @@ let nanoid;
 	nanoid = nanoidFn;
 })();
 
+// deletes temporary form records that were created during workflow parsing but
+// didn't make it into the final process structure (e.g. conditions that were removed)
 async function removeTempForms(tempForms) {
 	for (let tempForm of tempForms) {
 		const tempFormsDependencies = await postgres.FormsDependencies.findAll({
@@ -31,6 +33,9 @@ async function removeTempForms(tempForms) {
 	}
 }
 
+// builds the per-form submission workflow data by taking the master template and
+// injecting the before/after nodes that were attached to the matching DynamicForm node
+// in the process builder workflow.
 function buildWorkflowData(templateData, versionId, processName, formName, existingWorkflow, processBuilderWorkflow) {
 	const workflowId = existingWorkflow ? existingWorkflow.id : nanoid(16);
 	const workflowName = `${processName}/${formName} process workflow`;
@@ -40,6 +45,7 @@ function buildWorkflowData(templateData, versionId, processName, formName, exist
 	data.versionId = versionId;
 	data.id = workflowId;
 
+	// find the DynamicForm node in the original builder workflow that matches this form name
 	const dynamicFormsNode = findAllWorkflowNodesByType(
 		processBuilderWorkflow,
 		"CUSTOM.dynamicForm"
@@ -47,6 +53,7 @@ function buildWorkflowData(templateData, versionId, processName, formName, exist
 
 	logger.debug("dynamicFormsNode: " + JSON.stringify(dynamicFormsNode));
 
+	// output[1] = nodes connected to "Before form", output[2] = "After form"
 	const connections = findConnectionsByNodeName(dynamicFormsNode, processBuilderWorkflow);
 	const connectionsBefore = connections.main?.[1] ? connections.main[1] : [];
 	const connectionsAfter = connections.main?.[2] ? connections.main[2] : [];
@@ -58,19 +65,23 @@ function buildWorkflowData(templateData, versionId, processName, formName, exist
 	logger.debug("nodesBefore: "  + JSON.stringify(nodesBefore));
 	logger.debug("nodesAfter: " + JSON.stringify(nodesAfter));
 
+	// position the extra nodes so they show up nicely in the n8n canvas
 	modifyNodes(nodesBefore, "before");
 	modifyNodes(nodesAfter, "after");
 
 	logger.debug("data: " +  JSON.stringify(data));
 	logger.debug("nodes: " +  JSON.stringify(data.nodes));
+
 	for(let node of data.nodes) {
 		if(node.type === "CUSTOM.formInstanceStartNode") {
+			// wire the before-form nodes right after the start node
 			data.connections[node.name].main[0] = connectionsBefore;
 			data.nodes = data.nodes.concat(nodesBefore);
 		} else if(node.type === "CUSTOM.formInstanceResumeNode") {
 			if(!data.connections[node.name]) {
 				data.connections[node.name] = { main: []}
 			}
+			// wire the after-form nodes right after the resume node
 			data.connections[node.name].main[0] = connectionsAfter;
 			data.nodes = data.nodes.concat(nodesAfter);
 		}
@@ -78,6 +89,7 @@ function buildWorkflowData(templateData, versionId, processName, formName, exist
 	logger.debug("2data: " +  JSON.stringify(data));
 	logger.debug("2nodes: " +  JSON.stringify(data.nodes));
 
+	// assign fresh UUIDs to all nodes and update webhook IDs to use the new versionId
 	for (let node of data.nodes) {
 		node.id = uuidv4();
 
@@ -100,9 +112,12 @@ function buildWorkflowData(templateData, versionId, processName, formName, exist
 	return { data, workflowId };
 }
 
+// creates a new workflow in n8n by writing it directly to the database
+// (bypassing the REST API to avoid circular dependencies during startup)
 async function createWorkflow(workflowData, sharedWorkflowTemplate, folderId, processName) {
 	workflowData.parentFolderId = folderId;
 
+	// create the folder for this process if it doesn't already exist
 	const folder = await postgres.Folder.entity({ id: folderId });
 	if (!folder) {
 		const folderData = {
@@ -116,6 +131,7 @@ async function createWorkflow(workflowData, sharedWorkflowTemplate, folderId, pr
 
 	const workflow = await postgres.WorkflowEntities.create(workflowData);
 
+	// record an initial history entry so n8n can show the version timeline
 	const workflowHistoryData = {
 		versionId: workflowData.versionId,
 		workflowId: workflow.dataValues.id,
@@ -131,6 +147,7 @@ async function createWorkflow(workflowData, sharedWorkflowTemplate, folderId, pr
 		defaults: workflowHistoryData,
 	});
 
+	// grant access to the workflow within the same project as the template
 	const sharedWorkflowData = {
 		workflowId: workflowData.id,
 		projectId: sharedWorkflowTemplate.projectId,
@@ -143,6 +160,8 @@ async function createWorkflow(workflowData, sharedWorkflowTemplate, folderId, pr
 	logger.info(`Process Workflow created: ${workflowData.name}`);
 }
 
+// sets the positions of extra nodes so they don't overlap in the n8n canvas.
+// before-form nodes go on the left side, after-form nodes on the right.
 function modifyNodes(nodes, type) {
 	let posX = 272;
 	let posY = -160;
@@ -154,21 +173,21 @@ function modifyNodes(nodes, type) {
 	for(let node of nodes) {
 		node.position = [posX, posY];
 		node.disabled = false;
-		posY -= 170;
+		posY -= 170; // stack them vertically so they don't overlap
 	}
-
 }
 
 function findAllWorkflowNodesByType(workflow, type) {
 	return workflow.dataValues.nodes.filter(node => node.type === type);
 }
 
+// resolves node objects from a list of connection references
 function findAllNodesByConnection(connections, workflow) {
 	const result = [];
 	for (let connection of connections) {
 		const node = workflow.dataValues.nodes.find(node => node.name === connection.node);
 		if (node) {
-			result.push(JSON.parse(JSON.stringify(node)));
+			result.push(JSON.parse(JSON.stringify(node))); // deep copy so modifications don't affect the source
 		}
 	}
 	return result;
@@ -176,10 +195,10 @@ function findAllNodesByConnection(connections, workflow) {
 
 function findConnectionsByNodeName(node, workflow) {
 	const connections = workflow.dataValues.connections;
-
 	return connections[node.name];
 }
 
+// updates an existing workflow's nodes and connections, then re-activates it
 async function updateWorkflow(existingWorkflow, workflowData, sharedWorkflowTemplate, folderId, processName) {
 	existingWorkflow.name = workflowData.name;
 	existingWorkflow.nodes = workflowData.nodes;
@@ -205,6 +224,7 @@ async function updateWorkflow(existingWorkflow, workflowData, sharedWorkflowTemp
 		},
 	});
 
+	// create shared access record if it's missing (can happen if the workflow was created externally)
 	const existingShared = await postgres.SharedWorkflow.entity({ workflowId: existingWorkflow.id });
 	if (!existingShared) {
 		const folder = await postgres.Folder.entity({ id: folderId });
@@ -227,6 +247,8 @@ async function updateWorkflow(existingWorkflow, workflowData, sharedWorkflowTemp
 	logger.info(`Process Workflow updated: ${workflowData.name}`);
 }
 
+// activates a workflow via the n8n REST API.
+// we need to fetch the current versionId first because n8n requires it for the activate call.
 async function activateWorkflow(workflowId) {
 	const cookie = await getAuthCookie();
 
@@ -247,11 +269,14 @@ async function activateWorkflow(workflowId) {
 	);
 }
 
+// builds workflow data for a ProcessActionNode — similar to buildWorkflowData but
+// instead of before/after nodes it injects the action nodes defined in the process builder.
+// these run automatically when the action step is triggered, without any user input.
 function buildActionWorkflowData(templateData, form, existingWorkflow, processName) {
 	const workflowId = existingWorkflow ? existingWorkflow.id : nanoid(16);
 	const workflowName = `${processName}/${form.formName} process workflow`;
 
-	let data = JSON.parse(JSON.stringify(templateData));
+	let data = JSON.parse(JSON.stringify(templateData)); // deep copy so we don't mutate the template
 	data.name = workflowName;
 	data.versionId = form.formId;
 	data.id = workflowId;
@@ -266,6 +291,7 @@ function buildActionWorkflowData(templateData, form, existingWorkflow, processNa
 	data.nodes = data.nodes.concat(actionNodes);
 	Object.assign(data.connections, actionConnections);
 
+	// connect the start node directly to the first action node
 	if (firstActionNodeName) {
 		for (const node of data.nodes) {
 			if (node.type === 'CUSTOM.formInstanceStartNode') {
@@ -282,6 +308,7 @@ function buildActionWorkflowData(templateData, form, existingWorkflow, processNa
 		}
 	}
 
+	// assign fresh IDs and set the webhook path to the form's id
 	for (const node of data.nodes) {
 		node.id = uuidv4();
 		if (node.type === 'CUSTOM.formInstanceStartNode') {
@@ -291,6 +318,7 @@ function buildActionWorkflowData(templateData, form, existingWorkflow, processNa
 			if (node.parameters && node.parameters.path !== undefined) {
 				node.parameters.path = form.formId;
 			}
+			// update connection keys to match the renamed node
 			if (data.connections[oldName]) {
 				data.connections[sourceFormName] = data.connections[oldName];
 				delete data.connections[oldName];

@@ -10,6 +10,13 @@ import {
 
 const env = process.env;
 
+// Represents an automated step that runs without any user input.
+// Typical use: send a rejection email when an approver declines a request.
+//
+// The "Action" output is connected to standard n8n nodes (e.g. Send Email).
+// During the process setup run, this node walks the action output branch,
+// collects those nodes, and saves them to the backend.
+// The backend later generates a standalone workflow from them that fires automatically.
 export class ProcessActionNode implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Akcia procesu',
@@ -51,6 +58,7 @@ export class ProcessActionNode implements INodeType {
 		const workflowId = this.getWorkflow().id;
 		const nodeName = this.getNode().name;
 
+		// fetch node metadata and the full workflow definition in parallel
 		const [nodeInfo, workflowResponse] = await Promise.all([
 			this.helpers.request({
 				method: 'GET',
@@ -74,10 +82,12 @@ export class ProcessActionNode implements INodeType {
 		const wfNodes: any[] = workflowResponse.data?.nodes || [];
 		const wfConnections: any = workflowResponse.data?.connections || {};
 
+		// find the DynamicForm node that immediately precedes this action node
 		const prevIdList = prevNodeIds ? prevNodeIds.split(',').filter(Boolean) : [];
 		const sourceFormNode = wfNodes.find((n: any) => prevIdList.includes(n.id) && n.type === 'CUSTOM.dynamicForm');
 		const sourceFormName: string | null = sourceFormNode?.name ?? null;
 
+		// collect all nodes reachable from the "Action" output using BFS
 		const myConns = wfConnections[nodeName];
 		const actionOutputConns: any[] = myConns?.main?.[1] || [];
 
@@ -99,8 +109,9 @@ export class ProcessActionNode implements INodeType {
 				const node = wfNodes.find((n: any) => n.name === currentName);
 				if (!node) continue;
 
-				actionNodes.push(JSON.parse(JSON.stringify(node)));
+				actionNodes.push(JSON.parse(JSON.stringify(node))); // deep copy
 
+				// enqueue all downstream nodes
 				const nodeConns = wfConnections[currentName];
 				if (nodeConns?.main) {
 					for (const outputConns of nodeConns.main as any[][]) {
@@ -113,6 +124,7 @@ export class ProcessActionNode implements INodeType {
 				}
 			}
 
+			// rebuild connections keeping only edges within the collected action subgraph
 			for (const actionNode of actionNodes) {
 				const nodeConns = wfConnections[actionNode.name];
 				if (nodeConns?.main) {
@@ -124,6 +136,8 @@ export class ProcessActionNode implements INodeType {
 			}
 		}
 
+		// register this action node as a form step in the backend so it gets its own
+		// standalone workflow generated from the collected action nodes
 		await this.helpers.request({
 			method: 'POST',
 			url: `${env.NODE_APP_URL}/forms`,
@@ -158,6 +172,7 @@ export class ProcessActionNode implements INodeType {
 			{ json: prevNodeInfo },
 		];
 
+		// action output carries placeholders for the action nodes (used for visual feedback in n8n only)
 		const actionPlaceholder: INodeExecutionData[] = actionNodes.length > 0
 			? actionNodes.map(n => ({ json: { _actionNode: n.name, processId } }))
 			: [{ json: {} }];

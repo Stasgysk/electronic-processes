@@ -3,6 +3,22 @@
 /* eslint-disable n8n-nodes-base/node-param-display-name-miscased */
 /* eslint-disable n8n-nodes-base/node-param-description-excess-final-period */
 
+// Represents a single form step in a process.
+// During the process setup run, this node:
+//   1. Converts the designer's field configuration into a form_data schema.
+//   2. Registers the form as a step in the backend (/forms endpoint), linking it
+//      to the process and its predecessor steps.
+//   3. Outputs the schema on three branches:
+//      - main (output 0): the form definition + prevNode marker, passed to the next step
+//      - "Before form" (output 1): placeholder data for nodes that run before the form is shown
+//      - "After form" (output 2): placeholder data for nodes that run after the form is submitted
+//
+// User assignment is resolved at runtime by the backend using the userConfig saved here.
+// Three modes:
+//   - group: all members of a named user group get the form
+//   - role: backend finds users with this role in the process initiator's org unit
+//   - emails: explicit list (shared or per-user)
+
 import {
 	IExecuteFunctions,
 	ILoadOptionsFunctions,
@@ -18,7 +34,7 @@ const env = process.env;
 
 export class DynamicForm implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Formulár',
+		displayName: 'TUKE Formulár',
 		name: 'dynamicForm',
 		icon: 'file:../shared/assets/tuke.svg',
 		group: ['transform'],
@@ -54,7 +70,8 @@ export class DynamicForm implements INodeType {
 					loadOptionsMethod: 'getOrgRoles',
 				},
 				default: '',
-				description: 'Rola bude automaticky priradená podľa organizačnej jednotky iniciátora procesu.',
+				description:
+					'Rola bude automaticky priradená podľa organizačnej jednotky iniciátora procesu.',
 				displayOptions: {
 					show: {
 						userSelectionMethod: ['role'],
@@ -360,6 +377,7 @@ export class DynamicForm implements INodeType {
 
 	methods = {
 		loadOptions: {
+			// populates the "Skupina Používateľov" dropdown in the node UI
 			async getUserGroups(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				const env = process.env;
 				const response = await this.helpers.request({
@@ -377,6 +395,8 @@ export class DynamicForm implements INodeType {
 					value: group.name,
 				}));
 			},
+			// populates the "Rola" dropdown; deduplicates by name because the same role
+			// can exist in multiple org units but the designer only picks the role name
 			async getOrgRoles(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				const env = process.env;
 				const response = await this.helpers.request({
@@ -406,7 +426,6 @@ export class DynamicForm implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const inputData = this.getInputData(0);
-		//const additionalInfo = this.getInputData(1);
 
 		const formGroups = this.getNodeParameter('formGroups', 0) as {
 			group: Array<any>;
@@ -416,6 +435,7 @@ export class DynamicForm implements INodeType {
 		const beforeOutput: any[] = [];
 		const afterOutput: any[] = [];
 
+		// convert the designer's group config into the flat form_data schema stored in the backend
 		let form_data = [];
 		for (const group of formGroups.group) {
 			const groupType = group.groupType;
@@ -423,6 +443,7 @@ export class DynamicForm implements INodeType {
 			let data: any = { type: groupType };
 
 			data.groupName = group.groupName || '';
+			// built-in group types get a fixed set of fields; custom groups only have customFields
 			switch (groupType) {
 				case 'personal':
 					data.firstName = { name: group.firstName, type: 'string', value: '' };
@@ -445,13 +466,15 @@ export class DynamicForm implements INodeType {
 					break;
 			}
 
+			// merge any extra custom fields defined on top of a built-in or custom group
 			if (group.customFields && group.customFields.field) {
 				data.customFields = data.customFields || {};
 				for (const field of group.customFields.field) {
-					data[field.fieldName] = { name: field.fieldName, type: field.fieldType, value: "" };
+					data[field.fieldName] = { name: field.fieldName, type: field.fieldType, value: '' };
 				}
 			}
 
+			// customFields was just a staging area; the actual fields are now on data directly
 			delete data.customFields;
 
 			form_data.push(data);
@@ -469,6 +492,7 @@ export class DynamicForm implements INodeType {
 				isInputDataFound = inputField.json.data;
 			}
 
+			// presence of a "prevNode" item means this form has a predecessor in the chain
 			if (inputField?.json.type === 'prevNode') {
 				isNodeConnected = true;
 			}
@@ -478,6 +502,7 @@ export class DynamicForm implements INodeType {
 			}
 		}
 
+		// fall back to raw input if no "input" typed item was found
 		if (!isInputDataFound) {
 			isInputDataFound = inputData[0].json;
 		}
@@ -488,6 +513,7 @@ export class DynamicForm implements INodeType {
 		const workflowId = this.getWorkflow().id;
 		const nodeName = this.getNode().name;
 
+		// fetch this node's DB record to get its id and the ids of its preceding nodes
 		const response = await this.helpers.request({
 			method: 'GET',
 			url: `${env.NODE_APP_URL}/n8n/${workflowId}/${nodeName}`,
@@ -501,6 +527,7 @@ export class DynamicForm implements INodeType {
 		let prevNodeInfo: any = { type: 'prevNode', id: response.data.id };
 		output.push({ json: prevNodeInfo });
 
+		// only include prevNodeIds when this form is actually connected to a preceding step
 		let prevNodeIds = null;
 		if (isNodeConnected) {
 			prevNodeIds = response.data.prevNodeIds;
@@ -543,6 +570,7 @@ export class DynamicForm implements INodeType {
 			const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 			if (emailDefinitionType === 'shared') {
+				// all listed emails get the same form instance
 				const sharedUserEmails = this.getNodeParameter('sharedUserEmails', 0, '') as string;
 
 				if (!sharedUserEmails.trim()) {
@@ -568,6 +596,7 @@ export class DynamicForm implements INodeType {
 					},
 				};
 			} else if (emailDefinitionType === 'individual') {
+				// each user gets their own form instance with an optional personal note
 				const individualUsers = this.getNodeParameter('individualUsers', 0, { user: [] }) as {
 					user: Array<{ email: string; note?: string }>;
 				};
@@ -597,6 +626,7 @@ export class DynamicForm implements INodeType {
 			}
 		}
 
+		// register the form step in the backend; this is what the process runner reads later
 		await this.helpers.request({
 			method: 'POST',
 			url: `${env.NODE_APP_URL}/forms`,
@@ -615,6 +645,8 @@ export class DynamicForm implements INodeType {
 			rejectUnauthorized: env.IS_PROD === 'true',
 		});
 
+		// before/after outputs carry placeholder data for nodes on those branches
+		// (e.g. a "Send assignment email" node on the Before branch)
 		beforeOutput.push({
 			json: {
 				input: {

@@ -1,3 +1,10 @@
+// Process instance API calls used by the Filled tab and the filled view in FormsPage.
+//
+// getFilledProcessesAndFormsInstances — returns both arrays the FilledForms component
+//   needs: processesInstances (processes the user started) and formsInstances
+//   (individual steps the user approved in someone else's process).
+// getFilledProcessInstance — loads one process instance with all its nested
+//   formsInstances for the full read-only view.
 import gsAxios from "./gsAxios";
 
 export const getFilledProcessesAndFormsInstances = () => {

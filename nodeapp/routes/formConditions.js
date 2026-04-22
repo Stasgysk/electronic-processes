@@ -4,7 +4,8 @@
 let express = require('express');
 let router = express.Router();
 
-/* POST create or update a form condition */
+// called by the ConditionalFormRouter n8n node during process setup;
+// upserts the condition so re-running setup doesn't create duplicate records
 router.post('/', async function (req, res) {
     try {
         const { processId, sourceFormId, targetFormId, fieldName, operator, expectedValue } = req.body;

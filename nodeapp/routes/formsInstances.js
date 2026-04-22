@@ -22,7 +22,9 @@ router.get('/', async function (req, res, next) {
     }
 });
 
-/* GET all available forms instances */
+// returns WAITING form instances that belong to the current user;
+// after filtering, enriches each instance with the process/form name and the name of the person
+// who originally started the process (so the approver can see whose request they're reviewing)
 router.get('/available', async function (req, res) {
     try {
         const { eager, length, offset } = routesUtils.getDefaultRequestParams(req);
@@ -43,6 +45,7 @@ router.get('/available', async function (req, res) {
         const uid = parseInt(req.userId);
         const gid = userGroupId ? parseInt(userGroupId) : null;
 
+        // group-assigned instances match on group ID; all others match on user ID
         formsInstances = formsInstances.filter(fi => {
             const ids = (fi.assigneeId || []).map(Number);
             if (fi.instanceAssigneeType === "group") {
@@ -215,7 +218,9 @@ router.get('/users/:id', async function (req, res, next) {
     }
 });
 
-/* POST create new form status or update form status*/
+// handles form submission for both the starting form (no processInstanceId) and follow-up steps:
+//   - starting form: creates a ProcessInstance + FormInstance, spins up all subsequent instances
+//   - follow-up form: validates the user has access, marks the instance FILLED, activates the next steps
 router.post('/', async function (req, res, next) {
     try {
         const {formData, formId, userId, processInstanceId} = req.body;
@@ -382,7 +387,8 @@ router.post('/', async function (req, res, next) {
     }
 });
 
-/* POST create new form status or update form status*/
+// stores the n8n resume URL sent by FormInstanceResumeNode so the frontend
+// can later POST to it when the user submits their form
 router.post('/webhookUrl', async function (req, res, next) {
     try {
         const {resumeUrl, formInstanceId, formProcessId} = req.body;
@@ -409,7 +415,8 @@ router.post('/webhookUrl', async function (req, res, next) {
     }
 });
 
-/* POST called by ProcessActionEndNode when an action workflow finishes */
+// called by the action workflow's final node after it finishes (e.g. after sending an email);
+// marks the action form instance as FILLED and triggers whatever comes next in the process
 router.post('/actionComplete', async function (req, res) {
     try {
         const { formProcessId } = req.body;
@@ -476,6 +483,10 @@ router.post('/actionComplete', async function (req, res) {
     }
 });
 
+// called immediately after the first (starting) form is submitted;
+// creates INACTIVE/WAITING form instances for every subsequent step,
+// evaluates conditions to decide which branches to skip,
+// then fires the n8n start webhook so the first step's workflow can proceed
 async function createFollowUpFormsInstances(form, formInstanceId, processStatusId, user, formData) {
     const processId = form.dataValues.processId;
 
@@ -617,6 +628,7 @@ async function createFollowUpFormsInstances(form, formInstanceId, processStatusI
     );
 }
 
+// marks the process instance as ENDED when every form instance is in a terminal state
 async function isProcessFinished(processInstanceId) {
     const forms = await postgres.FormsInstances.entities({processInstanceId: processInstanceId});
     const isAnyFormsNotDone = forms.filter(fi =>
@@ -629,6 +641,10 @@ async function isProcessFinished(processInstanceId) {
     }
 }
 
+// called after any non-starting form is submitted;
+// activates the next INACTIVE instances that are now unblocked,
+// skips branches excluded by conditions,
+// and returns a list of newly WAITING form instance IDs for n8n to pick up
 async function routeAfterFormFilled(sourceFormId, processInstanceId, processId, formData) {
     const nextDeps = await postgres.FormsDependencies.entities({ prevFormId: sourceFormId });
     const nextWaitingFormsIds = [];
@@ -731,6 +747,10 @@ async function routeAfterFormFilled(sourceFormId, processInstanceId, processId, 
     return nextWaitingFormsIds;
 }
 
+// decides whether the edge from sourceForm to targetForm is 'allowed', 'blocked', or 'unconditional':
+//   - no conditions on sourceForm → unconditional (always proceed)
+//   - condition exists for targetForm → evaluate it directly
+//   - conditions exist but none targets this form → blocked if any other branch matched (exclusive branching)
 async function evaluateConditions(sourceFormId, targetFormId, processId, formData) {
     const allConditions = await postgres.FormConditions.entities({ processId, sourceFormId });
 
@@ -772,6 +792,8 @@ function checkCondition(condition, formData) {
     }
 }
 
+// recursively marks a form instance and all downstream instances as SKIPPED;
+// stops recursing into a branch if any predecessor of the next form is still in progress
 async function skipFormAndDescendants(formInstanceId, processInstanceId) {
     const formInstances = await postgres.FormsInstances.entities({
         formInstanceId,
@@ -846,6 +868,14 @@ async function triggerActionWorkflow(formInstance, formData) {
 }
 
 
+// finds the user IDs who currently hold a given role in the context of a specific process initiator.
+//
+// Two resolution strategies:
+//   1. If the role has an emailPattern set on any instance, collect all users assigned to any
+//      role with that name regardless of unit (global pattern-based roles).
+//   2. Otherwise walk up the org hierarchy from the initiator's org unit (and workplaces)
+//      until a unit is found that has the named role with at least one current assignee.
+//      This lets e.g. a student from Faculty A automatically get the Faculty A dean.
 async function resolveRoleToUsers(roleName, initiatorUserId) {
     const { Op } = require('sequelize');
 

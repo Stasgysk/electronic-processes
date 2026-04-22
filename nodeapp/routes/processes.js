@@ -21,7 +21,8 @@ router.get('/', async function (req, res, next) {
     }
 });
 
-/* GET all processes for admin with submission/awaiting counts */
+// admin view: all processes including soft-deleted ones, enriched with
+// total submission count and how many form instances are still in WAITING state
 router.get('/admin', async function (req, res, next) {
     try {
         const processes = await postgres.Processes.findAll({
@@ -30,7 +31,7 @@ router.get('/admin', async function (req, res, next) {
                 { model: postgres.ProcessesTypes, as: 'processType' }
             ],
             order: [['updatedAt', 'DESC']],
-            paranoid: false
+            paranoid: false  // include soft-deleted processes
         });
 
         const enriched = await Promise.all(processes.map(async (p) => {
@@ -38,6 +39,7 @@ router.get('/admin', async function (req, res, next) {
                 where: { processId: p.id }
             });
 
+            // need the instance IDs to count waiting form instances across all submissions
             const piIds = (await postgres.ProcessesInstances.findAll({
                 where: { processId: p.id },
                 attributes: ['id'],
@@ -112,7 +114,8 @@ router.get('/:id', async function (req, res, next) {
     }
 });
 
-/* POST create new process */
+// called by the FormStartNode n8n trigger; creates the process record if it doesn't exist yet
+// (the setup workflow can run more than once so idempotency matters here)
 router.post('/', async function (req, res, next) {
     try {
         const {name, processGroupName, processTypeName} = req.body;
@@ -122,12 +125,14 @@ router.post('/', async function (req, res, next) {
             return res.status(400).json(resBuilder.fail("Bad request"));
         }
 
+        // if the process was already created by a previous run, just return it
         let process = await postgres.Processes.entity({name: name});
 
         if(process) {
             return res.status(200).json(resBuilder.success(process));
         }
 
+        // auto-create group and type records if they don't exist; they're just labels
         let processGroup = await postgres.ProcessesGroups.entity({name: processGroupName});
         let processType = await postgres.ProcessesTypes.entity({name: processTypeName});
 

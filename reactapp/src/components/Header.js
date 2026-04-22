@@ -1,3 +1,16 @@
+// Top navigation bar rendered on every authenticated page.
+//
+// Two layouts in one file:
+//   Desktop header  — horizontal bar with nav buttons, LoginButton, and language toggle
+//   Mobile drawer   — slide-in panel triggered by a hamburger button
+//
+// The language toggle writes the chosen code to localStorage ('lang') so the next
+// page load can restore the preference before i18next initialises.
+//
+// The Admin link is only shown to users whose group name is 'ADMIN'.
+// handleNavigate closes the mobile drawer before navigating so it doesn't
+// stay open after the route changes.
+
 import './Header.css'
 import LoginButton from "./LoginButton";
 import {useUser} from "../contexts/UserContext";
@@ -10,6 +23,7 @@ export default function Header() {
     const { t, i18n } = useTranslation();
     const { user } = useUser();
     const navigate = useNavigate();
+    // radioValue tracks which language button is visually selected
     const [radioValue, setRadioValue] = useState('1');
     const [drawerOpen, setDrawerOpen] = useState(false);
     const isStaff = user && user.UsersGroups?.name === 'ADMIN';

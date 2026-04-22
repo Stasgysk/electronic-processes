@@ -1,3 +1,5 @@
+// seeds a minimal org structure for TUKE on first startup;
+// uses findOrCreate so re-running on an already-populated DB is safe
 async function seedOrgStructure(db) {
     async function findOrCreateUnit(name, type, parentId, studentPickable = false) {
         const where = parentId != null

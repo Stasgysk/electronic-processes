@@ -316,6 +316,8 @@ function RolesPanel({ unit, onRefresh, onUnitUpdate }) {
     );
 }
 
+// walks up the parentId chain to produce a breadcrumb like "Faculty › Department › Role";
+// drops the top-level university node so the display stays concise
 function buildUnitPath(unitId, flatUnits) {
     const path = [];
     let currentId = unitId;

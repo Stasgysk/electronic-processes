@@ -1,3 +1,8 @@
+// Current user API calls.
+// me()       — fetches the logged-in user's full profile including group and org unit.
+//              Called by UserContext on app load and after onboarding completes.
+// putGroup() — updates the user's group and/or org unit.  Used by the onboarding
+//              modal when a new employee or admin selects their workplaces.
 import gsAxios from "./gsAxios";
 
 export const me = () => {

@@ -10,10 +10,12 @@ export const UserProvider = ({ children }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
+    // prevents a duplicate fetch if the component re-renders while the first request is in flight
     const didFetchUserRef = useRef(false);
 
     useEffect(() => {
         if (!accessToken) {
+            // user logged out — reset everything
             setUser(null);
             setError(null);
             setLoading(false);

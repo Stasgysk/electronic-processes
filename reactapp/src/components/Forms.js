@@ -1,3 +1,35 @@
+// Form view page — handles three distinct modes controlled by the ?type= query param:
+//
+//   type=start
+//     User is filling in a form for the first time.
+//     Form definition is fetched by id from /forms/:id.
+//     On submit: sends formData + formId + userId (no processInstanceId).
+//
+//   type=instance
+//     User is an approver filling in their step of an existing process.
+//     Previous steps are loaded from /formsInstances/previous and shown as
+//     collapsible accordion sections above the active form.
+//     On submit: body includes processInstanceId so the backend can link the step.
+//
+//   type=filled (without processInstanceId)
+//     User views a process they initiated — all steps read-only.
+//     Loads from /processesInstances/initialized/:id (returns the full process
+//     with nested formsInstances array), sorted by updatedAt.
+//
+//   type=filled (with processInstanceId)
+//     User views a single form step they approved — read-only.
+//     Loads from /formsInstances/filled/:id.
+//
+// handleChange initialises formValues from form.formData on the first keystroke
+// (when formValues is still []) so the array is always parallel to formData groups.
+// Validation runs per field; errors are stored on the field object as .error.
+//
+// File fields hold a File object in formValues.  convertFilesToBase64 replaces all
+// File objects with base64 strings before the body is POSTed to /formsInstances.
+//
+// After submission navigate("/") passes state.refresh=true so App.js bumps its
+// refreshKey and all three form lists reload.
+
 import {useLocation, useNavigate, useParams} from "react-router-dom";
 import {useEffect, useState} from "react";
 import {getFormById} from "../api/forms.service";

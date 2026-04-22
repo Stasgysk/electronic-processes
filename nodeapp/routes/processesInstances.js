@@ -7,7 +7,9 @@ const formStatuses = require('../enums/FormStatuses');
 const {Op} = require("sequelize");
 let router = express.Router();
 
-/* GET all initialized processes instances */
+// returns all process instances started by the current user, plus any form instances
+// where this user filled a non-starting form (e.g. a professor who approved a request).
+// the two groups are returned separately so the frontend can render them differently.
 router.get('/initialized', async function (req, res) {
     try {
         const { eager, length, offset } = routesUtils.getDefaultRequestParams(req);
@@ -19,6 +21,7 @@ router.get('/initialized', async function (req, res) {
             initializedProcessInstance.dataValues.name = process.dataValues.name;
             const formsInstances = await postgres.FormsInstances.entities({ processInstanceId: initializedProcessInstance.dataValues.id });
             for(let formsInstance of formsInstances) {
+                // hide form data for steps that haven't been filled yet
                 if(formsInstance.dataValues.status !== formStatuses.FILLED) {
                     formsInstance.dataValues.formData = {};
                     const form = await postgres.Forms.entity({id: formsInstance.dataValues.formId});
@@ -30,10 +33,13 @@ router.get('/initialized', async function (req, res) {
 
         const initializedProcessInstancesIds = initializedProcessesInstances.map(f => f.dataValues.id);
 
+        // also include form instances filled by this user in processes they didn't start
         const restFormsInstances = await postgres.FormsInstances.entities({filledUserId: req.userId, processInstanceId: { [Op.notIn]: initializedProcessInstancesIds }});
 
         for(let restFormInstance of restFormsInstances) {
             const form = await postgres.Forms.entity({id: restFormInstance.dataValues.formId});
+
+            // find the name of the person who originally started the process
             if(form.dataValues.isStartingNode === true) {
                 const startingFormInstance = await postgres.FormsInstances.entity({formId: form.dataValues.id, processInstanceId: restFormInstance.dataValues.processInstanceId}, true);
                 restFormInstance.dataValues.initialUserName = startingFormInstance.dataValues.user.name;
@@ -52,7 +58,7 @@ router.get('/initialized', async function (req, res) {
     }
 });
 
-/* GET all initialized processes instances */
+/* GET single process instance with all its form instances */
 router.get('/initialized/:id', async function (req, res) {
     try {
         const { eager, length, offset } = routesUtils.getDefaultRequestParams(req);
@@ -64,6 +70,7 @@ router.get('/initialized/:id', async function (req, res) {
         initializedProcessInstance.dataValues.name = process.dataValues.name;
         const formsInstances = await postgres.FormsInstances.entities({ processInstanceId: initializedProcessInstance.dataValues.id });
         for(let formsInstance of formsInstances) {
+            // hide data for steps that are still pending
             if(formsInstance.dataValues.status !== formStatuses.FILLED) {
                 formsInstance.dataValues.formData = {};
             }

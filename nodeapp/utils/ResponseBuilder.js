@@ -1,3 +1,5 @@
+// Wraps all API responses in a consistent shape: { status, data }
+// Use success() for 2xx responses, fail() for client errors (4xx), error() for server errors (5xx)
 class ResponseBuilder {
     constructor() {
 

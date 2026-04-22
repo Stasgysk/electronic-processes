@@ -7,9 +7,14 @@ import {
 
 const env = process.env;
 
+// The entry point of every process workflow.
+// When the workflow is activated (run once at setup time), this node fires immediately
+// and creates the process record in the backend database.
+// The processId returned is passed downstream so subsequent DynamicForm nodes
+// know which process they belong to.
 export class FormStartNode implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Počiatočný uzol',
+		displayName: 'TUKE Počiatočný uzol',
 		name: 'formStartNode',
 		icon: 'file:../shared/assets/tuke.svg',
 		group: ['trigger'],
@@ -27,8 +32,9 @@ export class FormStartNode implements INodeType {
 				type: 'string',
 				placeholder: 'Žiadosť o 2. opravný termín',
 				default: '',
-				required: true
+				required: true,
 			},
+			// process group and type are used for categorisation in the admin panel
 			{
 				displayName: 'Okruh Procesu',
 				name: 'formProcessGroup',
@@ -39,7 +45,7 @@ export class FormStartNode implements INodeType {
 					{ name: 'Pomocné', value: 'support' },
 				],
 				default: 'main',
-				required: true
+				required: true,
 			},
 			{
 				displayName: 'Manažérske Procesy',
@@ -109,6 +115,7 @@ export class FormStartNode implements INodeType {
 		}
 		const formProcessGroup = this.getNodeParameter('formProcessGroup', 0) as string;
 
+		// pick the sub-type based on whichever group was selected
 		let selectedProcessType: string | undefined;
 
 		if (formProcessGroup === 'management') {
@@ -119,33 +126,34 @@ export class FormStartNode implements INodeType {
 			selectedProcessType = this.getNodeParameter('supportProcesses', 0) as string;
 		}
 
+		// create the process record in the backend and get back the assigned processId
 		const response = await this.helpers.request({
 			method: 'POST',
 			url: `${env.NODE_APP_URL}/processes`,
 			json: true,
 			body: {
-				"name": name,
-				"processGroupName": formProcessGroup,
-				"processTypeName": selectedProcessType
+				name: name,
+				processGroupName: formProcessGroup,
+				processTypeName: selectedProcessType,
 			},
 			headers: {
 				'X-Service-Auth': env.INTERNAL_SECRET,
 			},
-			rejectUnauthorized: env.IS_PROD === "true",
+			rejectUnauthorized: env.IS_PROD === 'true',
 		});
-
 
 		const data = {
 			name,
 			formProcessGroup,
 			selectedProcessType,
-			processId: response.data.id
+			processId: response.data.id,
 		};
 
 		const emitData = () => {
 			this.emit([this.helpers.returnJsonArray([data])]);
 		};
 
+		// small delay so downstream nodes are ready to receive the event
 		const timeout = global.setTimeout(emitData, 200);
 
 		return {

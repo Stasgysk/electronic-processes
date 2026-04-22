@@ -1,3 +1,21 @@
+// User profile page with two sections:
+//   1. My current role assignments — chips showing role name + org unit, with a leave button.
+//   2. Join a new role — dropdown grouped by org unit, optional access code field.
+//
+// Role assignments (UserOrgRole records) are what the backend uses to route form approvals.
+// A user must be assigned to a role before they can appear as an approver in any workflow.
+//
+// Two sub-components:
+//   MyRoleChip      — renders one existing assignment; leave triggers a confirm dialog
+//   JoinRoleForm    — handles the join flow:
+//                     - roles are pre-filtered to exclude ones the user already has
+//                     - grouped by org unit via reduce into <optgroup>s
+//                     - needsCode flag controls whether the access code input is shown;
+//                       roles with hasCode=false require admin assignment instead
+//
+// On successful join, handleJoined pushes the new assignment into local state immediately
+// (optimistic update) so the list updates without a full reload.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Badge, Button, Form, InputGroup, Spinner } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';

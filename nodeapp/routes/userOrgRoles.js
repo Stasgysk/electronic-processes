@@ -79,7 +79,7 @@ router.post('/', async function (req, res) {
     }
 });
 
-/* POST self-join a role using access code */
+// allows a user to self-assign to a role without admin action, using an access code
 router.post('/join', async function (req, res) {
     try {
         const { orgRoleId, accessCode } = req.body;
@@ -114,6 +114,8 @@ router.post('/join', async function (req, res) {
     }
 });
 
+// when a user joins a role, some process instances may have been stuck waiting for
+// someone in that role to exist; find those and create form instances for the new member
 async function triggerReResolveForRole(orgRoleId) {
     const role = await postgres.OrgRoles.entity({ id: parseInt(orgRoleId) });
     if (!role || !role.name) return;

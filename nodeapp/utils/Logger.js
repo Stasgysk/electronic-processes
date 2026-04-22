@@ -12,16 +12,19 @@ class Logger {
     }
 
     log(level, message) {
+        // stringify objects so they show up nicely in the log
         try {
             if (message instanceof Object) {
                 message = JSON.stringify(message, this.sanitizeReplacer);
             }
         } catch (e) {}
 
+        // mask any base64 blobs that ended up in the message
         if (typeof message === 'string') {
             message = this.maskBase64(message);
         }
 
+        // only print if this level is at or above the configured minimum
         const levelIndex = this.levels.indexOf(level);
         if (levelIndex >= this.logLevelIndex) {
             const timestamp = new Date().toISOString();
@@ -29,6 +32,7 @@ class Logger {
         }
     }
 
+    // JSON replacer that shortens large blobs so they don't flood the log
     sanitizeReplacer(key, value) {
         const sensitiveKeys = ['base64', 'data', 'file', 'content', 'binary', 'buffer'];
 
@@ -38,6 +42,7 @@ class Logger {
             }
         }
 
+        // truncate any unexpectedly long string
         if (typeof value === 'string' && value.length > 500) {
             return value.substring(0, 100) + `... [${value.length} chars total]`;
         }
@@ -45,6 +50,7 @@ class Logger {
         return value;
     }
 
+    // replaces long base64-looking strings in log messages with a placeholder
     maskBase64(str) {
         return str.replace(
             /[A-Za-z0-9+/=]{100,}/g,

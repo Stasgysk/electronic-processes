@@ -1,3 +1,12 @@
+// Form instance API calls — submitting, fetching awaiting/previous/filled steps.
+//
+// sendFilledForm   — posts a completed form step; body includes formData, formId,
+//                    userId, and optionally processInstanceId (for approver steps).
+// getAwaitingForms — returns WAITING form instances the current user needs to fill;
+//                    optional formId+processInstanceId filters to a specific step.
+// getPreviousFilledForms — loads already-completed steps for the same process,
+//                          shown read-only above the current approver step.
+// getFilledFormInstanceById — single filled step for the "filled with pid" view.
 import gsAxios from "./gsAxios";
 
 export const sendFilledForm = (body) => {

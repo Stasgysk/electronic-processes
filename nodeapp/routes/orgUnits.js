@@ -4,6 +4,7 @@
 let express = require('express');
 let router = express.Router();
 
+// converts the flat list of units into a nested tree by parent-child relationships
 function buildTree(units) {
     const map = {};
     const roots = [];
@@ -101,6 +102,7 @@ router.post('/users/:userId/workplaces', async function (req, res) {
         const unit = await postgres.OrgUnits.entity({ id: parseInt(orgUnitId) });
         if (!unit) return res.status(400).json(resBuilder.fail("Org unit not found"));
 
+        // return the existing record silently if the workplace is already assigned
         const existing = await postgres.UserWorkplaces.entity({ userId: parseInt(req.params.userId), orgUnitId: parseInt(orgUnitId) });
         if (existing) return res.status(200).json(resBuilder.success(existing));
 
@@ -125,7 +127,7 @@ router.delete('/users/:userId/workplaces/:wpId', async function (req, res) {
     }
 });
 
-/* PUT assign org unit to user */
+/* PUT assign org unit to user (sets the primary unit, not a workplace) */
 router.put('/users/:userId', async function (req, res) {
     try {
         const { orgUnitId } = req.body;
@@ -178,7 +180,8 @@ router.put('/:id', async function (req, res) {
     }
 });
 
-/* POST clone an org unit (deep copy: children + roles, no user assignments) */
+// deep-clones a unit and all its children recursively.
+// roles are copied but user assignments are not — the clone starts clean.
 router.post('/:id/clone', async function (req, res) {
     try {
         const source = await postgres.OrgUnits.entity({ id: req.params.id });
@@ -201,6 +204,7 @@ router.post('/:id/clone', async function (req, res) {
 async function cloneUnitRecursive(sourceId, name, type, parentId, allUnits, allRoles) {
     const newUnit = await postgres.OrgUnits.create({ name, type: type || null, parentId: parentId || null });
 
+    // copy roles from the source unit to the new unit
     const sourceRoles = allRoles.filter(r => r.orgUnitId === sourceId);
     for (const role of sourceRoles) {
         await postgres.OrgRoles.create({
@@ -212,6 +216,7 @@ async function cloneUnitRecursive(sourceId, name, type, parentId, allUnits, allR
         });
     }
 
+    // recurse into child units
     const children = allUnits.filter(u => u.parentId === sourceId);
     for (const child of children) {
         await cloneUnitRecursive(child.id, child.name, child.type, newUnit.id, allUnits, allRoles);

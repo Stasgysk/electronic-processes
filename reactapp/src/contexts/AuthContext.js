@@ -11,6 +11,7 @@ export const AuthProvider = ({ children }) => {
     const [authLoading, setAuthLoading] = useState(true);
     const navigate = useNavigate();
 
+    // refs prevent the login/refresh logic from running twice in React StrictMode
     const didLoginRef = useRef(false);
     const isRefreshingRef = useRef(false);
 
@@ -21,6 +22,7 @@ export const AuthProvider = ({ children }) => {
             const storedExpiresIn = localStorage.getItem("expiresIn");
 
             if (storedAccessToken) {
+                // page reload — try to refresh the existing session before anything else
                 if (isRefreshingRef.current) return;
                 isRefreshingRef.current = true;
                 try {
@@ -34,6 +36,7 @@ export const AuthProvider = ({ children }) => {
                         return;
                     }
                 } catch (err) {
+                    // refresh failed (session expired) — clear stored tokens and fall through to SSO
                     localStorage.removeItem("accessToken");
                     localStorage.removeItem("csrfToken");
                     localStorage.removeItem("expiresIn");
@@ -44,6 +47,7 @@ export const AuthProvider = ({ children }) => {
 
             if (didLoginRef.current) return;
 
+            // SSO redirected back with ?code= in the URL — complete the login
             const params = new URLSearchParams(window.location.search);
             const code = params.get("code");
             if (!code) return;
@@ -55,6 +59,8 @@ export const AuthProvider = ({ children }) => {
         initAuth().finally(() => setAuthLoading(false));
     }, []);
 
+    // set up a background interval that refreshes the token at 75% of its lifetime
+    // so the user doesn't get logged out mid-session
     useEffect(() => {
         if (!accessToken) return;
 
@@ -73,6 +79,7 @@ export const AuthProvider = ({ children }) => {
         return () => clearInterval(interval);
     }, [accessToken, expiresIn, csrfToken]);
 
+    // exchanges the SSO authorization code for tokens and stores them
     const loginWithCode = async (code) => {
         const data = await login({ code });
         if (data.status === "success") {
@@ -82,10 +89,11 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem("accessToken", data.data.accessToken);
             localStorage.setItem("csrfToken", data.data.csrfToken);
             localStorage.setItem("expiresIn", data.data.expiresIn);
-            navigate("/", { replace: true });
+            navigate("/", { replace: true }); // remove ?code= from the URL
         }
     };
 
+    // redirects the browser to the TUKE SSO login page
     const redirectToSSO = () => {
         window.location.href = `${process.env.REACT_APP_AUTH_URL}?client_id=${process.env.REACT_APP_CLIENT_ID}&redirect_uri=${encodeURIComponent(
             process.env.REACT_APP_REDIRECT_URI

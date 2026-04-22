@@ -1,3 +1,9 @@
+// OrgRole API calls — the role definitions attached to org units.
+//
+// getOrgRoles       — all roles for a specific org unit (used in admin panel).
+// getBrowseableRoles — roles a user can self-join from their profile page;
+//                      the backend filters out roles that are admin-only.
+// createOrgRole / updateOrgRole / deleteOrgRole — admin CRUD.
 import gsAxios from "./gsAxios";
 
 export const getOrgRoles = (orgUnitId) =>

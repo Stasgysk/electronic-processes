@@ -31,7 +31,7 @@ router.get('/roles', async function (req, res, next) {
     }
 });
 
-/* PUT update user */
+// called from the onboarding modal; user selects their group and org unit
 router.put('/', async function (req, res, next) {
     try {
         const { userGroupId, orgUnitId } = req.body;
@@ -41,6 +41,7 @@ router.put('/', async function (req, res, next) {
         if (userGroupId !== undefined) {
             const userGroup = await postgres.UsersGroups.entity({ id: userGroupId });
             if (!userGroup) return res.status(404).json(resBuilder.fail('User group not found'));
+            // promoting to ADMIN requires a secret code configured in env
             if (userGroup.name === 'ADMIN') {
                 const adminCode = (req.body.adminCode || '').trim();
                 const envCode = (process.env.ADMIN_CODE || '').trim();
@@ -54,6 +55,7 @@ router.put('/', async function (req, res, next) {
             user.userGroupId = userGroupId;
         }
 
+        // null orgUnitId is valid (user can clear their org unit)
         const newOrgUnitId = orgUnitId !== undefined ? (orgUnitId ? parseInt(orgUnitId) : null) : undefined;
         if (newOrgUnitId !== undefined) {
             user.orgUnitId = newOrgUnitId;
@@ -61,6 +63,7 @@ router.put('/', async function (req, res, next) {
 
         await user.save();
 
+        // when the org unit changes, recalculate pattern-based role assignments in the background
         if (newOrgUnitId) {
             reassignOrgRolesByEmailAndUnit(user.id, user.email, newOrgUnitId).catch(e => logger.error(e));
         }

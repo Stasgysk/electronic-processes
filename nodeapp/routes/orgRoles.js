@@ -4,7 +4,8 @@
 let express = require('express');
 let router = express.Router();
 
-/* GET all roles for browsing/joining — returns hasCode instead of raw accessCode */
+// returns roles stripped of their accessCode — only exposes whether a code exists.
+// used by the profile page so users can see which roles they can join.
 router.get('/browseable', async function (req, res) {
     try {
         const { OrgUnits } = postgres;
@@ -17,7 +18,7 @@ router.get('/browseable', async function (req, res) {
             id: r.id,
             name: r.name,
             orgUnitId: r.orgUnitId,
-            hasCode: !!r.accessCode,
+            hasCode: !!r.accessCode, // true/false — never expose the actual code
             OrgUnit: r.OrgUnit,
         }));
         return res.status(200).json(resBuilder.success(result));
@@ -27,7 +28,7 @@ router.get('/browseable', async function (req, res) {
     }
 });
 
-/* GET roles (optionally filtered by orgUnitId) */
+/* GET roles — optionally filtered by orgUnitId */
 router.get('/', async function (req, res) {
     try {
         const { orgUnitId } = req.query;
@@ -55,6 +56,7 @@ router.post('/', async function (req, res) {
             sortOrder: sortOrder != null ? parseInt(sortOrder) : null,
         });
 
+        // if a pattern was set, immediately assign all existing users whose email matches
         if (emailPattern) {
             await autoAssignByPattern(role.id, emailPattern);
         }
@@ -66,7 +68,7 @@ router.post('/', async function (req, res) {
     }
 });
 
-/* PATCH update role (name, emailPattern, accessCode) */
+/* PATCH update role */
 router.patch('/:id', async function (req, res) {
     try {
         const role = await postgres.OrgRoles.entity({ id: req.params.id });
@@ -80,6 +82,7 @@ router.patch('/:id', async function (req, res) {
         if (sortOrder !== undefined) role.sortOrder = sortOrder != null ? parseInt(sortOrder) : null;
         await role.save();
 
+        // re-run auto-assignment in case the pattern changed
         if (emailPattern) {
             await autoAssignByPattern(role.id, emailPattern);
         }
@@ -104,6 +107,8 @@ router.delete('/:id', async function (req, res) {
     }
 });
 
+// walks all users and assigns them to this role if their email contains the pattern.
+// tied to the current semester so the assignment gets the right validity dates.
 async function autoAssignByPattern(orgRoleId, emailPattern) {
     const currentSemester = await postgres.Semesters.entity({ isCurrent: true });
     const semesterId = currentSemester ? currentSemester.id : null;

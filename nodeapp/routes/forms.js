@@ -20,7 +20,8 @@ router.get('/', async function (req, res, next) {
     }
 });
 
-/* GET all available forms */
+// returns only the starting-node forms the current user is allowed to initiate;
+// a form is visible if the user matches at least one FormsAssignee entry by group, direct userId, or role
 router.get('/available', async function (req, res, next) {
     try {
         const {eager, length, offset} = routesUtils.getDefaultRequestParams(req);
@@ -28,6 +29,7 @@ router.get('/available', async function (req, res, next) {
         const currentUser = await postgres.Users.entity({ id: req.userId });
         const userGroupId = currentUser ? parseInt(currentUser.userGroupId) : null;
 
+        // collect all org role names the user currently holds for role-based matching
         const userOrgRoleAssignments = await postgres.UserOrgRoles.entities({ userId: req.userId }, true);
         const userRoleNames = new Set(
             userOrgRoleAssignments.map(uor => uor.OrgRole?.name).filter(Boolean)
@@ -36,6 +38,7 @@ router.get('/available', async function (req, res, next) {
         let forms = await postgres.Forms.entities({isStartingNode: true}, true, null, length, offset);
         forms = forms.filter(form => {
             const process = form.dataValues.Processes;
+            // only show forms whose parent process is in PUBLISHED state
             if (!process || process.status !== processStatus.PUBLISHED) return false;
             return form.dataValues.FormsAssignees.some(fa => {
                 if (fa.userGroupId !== null && userGroupId !== null && fa.userGroupId === userGroupId) return true;
@@ -71,7 +74,8 @@ router.get('/:id', async function (req, res, next) {
     }
 });
 
-/* POST create new form */
+// called by the DynamicForm / ProcessActionNode n8n nodes during the process setup run;
+// creates or updates a Form record and its assignee configuration
 router.post('/', async function (req, res, next) {
     try {
         const {formName, formId, formData, processId, prevFormIds, userConfig} = req.body;
@@ -90,6 +94,7 @@ router.post('/', async function (req, res, next) {
         let formType = "form";
         let actionWorkflowNodes = null;
 
+        // translate the userConfig sent from n8n into the DB fields
         switch (userConfig.type) {
             case "group":
                 userGroup = await postgres.UsersGroups.entity({name: userConfig.data.groupName});
@@ -100,11 +105,13 @@ router.post('/', async function (req, res, next) {
             case "emails":
                 switch (userConfig.data.mode) {
                     case "shared":
+                        // all listed emails share a single form instance
                         formAssigneeType = "shared_emails";
                         users = userConfig.data.emails;
                         userEmails = userConfig.data.emails.join(',');
                         break;
                     case "individual":
+                        // each email gets their own form instance
                         formAssigneeType = "individual_emails";
                         users = userConfig.data.users;
                         userEmails = userConfig.data.users.map(u => u.email).join(',');
@@ -129,6 +136,7 @@ router.post('/', async function (req, res, next) {
         if(prevFormIds) {
             const existingPrevFormDependencies = await postgres.FormsDependencies.entities({processId: processId, formId: formId});
 
+            // remove dependency records for predecessors that are no longer connected
             for(let existingPrevFormDependency of existingPrevFormDependencies) {
                 if(!prevFormIds.includes(existingPrevFormDependency.dataValues.prevFormId)) {
                     await existingPrevFormDependency.destroy();
@@ -139,6 +147,7 @@ router.post('/', async function (req, res, next) {
                 const prevForm = await postgres.Forms.entity({formId: prevFormId});
 
                 if(!prevForm) {
+                    // n8n nodes can register in any order; create a placeholder so the FK constraint holds
                     const prevFormData = {
                         formName: "TempName",
                         formId: prevFormId,
@@ -244,6 +253,8 @@ router.put('/:id', async function (req, res, next) {
     }
 });
 
+// ensures a UsersFormsDependencies record exists for every email;
+// creates a stub user if the email hasn't logged in yet
 async function createUsersDependencies(userEmails, formId) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const emails = userEmails
@@ -263,6 +274,7 @@ async function createUsersDependencies(userEmails, formId) {
 
     const existingDeps = await postgres.UsersFormsDependencies.entities({ formId });
 
+    // remove deps for emails that were removed from the list
     for (const dep of existingDeps) {
         if (!userIds.includes(dep.dataValues.userId)) {
             await dep.destroy();
@@ -277,8 +289,11 @@ async function createUsersDependencies(userEmails, formId) {
     }
 }
 
+// syncs FormsAssignees to match the current userConfig;
+// role-based assignment is a single record; group/email assignment is one record per user
 async function createFormsAssignees(formId, users = null, userGroupId = null, roleName = null) {
     if (roleName) {
+        // role assignment: replace whatever was there with a single role record
         const existing = await postgres.FormsAssignees.entities({ formId });
         for (const dep of existing) {
             await dep.destroy();

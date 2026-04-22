@@ -1,4 +1,10 @@
 /* eslint-disable n8n-nodes-base/node-execute-block-wrong-error-thrown */
+
+// Webhook trigger that starts a single form instance workflow.
+// Each form instance gets its own copy of the workflow, and this node is the entry point.
+// The backend calls this webhook when it decides it's time to activate a form instance
+// (i.e., when all preceding steps in the process have been completed).
+
 import {
 	IWebhookFunctions,
 	IWebhookResponseData,
@@ -52,6 +58,7 @@ export class FormInstanceStartNode implements INodeType {
 		const resp = this.getResponseObject();
 		const body = this.getBodyData();
 
+		// reject unauthenticated callers before doing anything else
 		try {
 			await FormInstanceStartNode.validateAuth(this);
 		} catch (error) {
@@ -62,6 +69,7 @@ export class FormInstanceStartNode implements INodeType {
 			throw error;
 		}
 
+		// first output carries the form data and submitter info for the "before form" branch
 		const firstOutput = [
 			{
 				json: {
@@ -75,6 +83,7 @@ export class FormInstanceStartNode implements INodeType {
 			},
 		];
 
+		// second output is a pass-through used for parallel "after form" logic
 		const secondOutput = [
 			{
 				json: {
@@ -92,6 +101,7 @@ export class FormInstanceStartNode implements INodeType {
 		};
 	}
 
+	// basic auth check shared between start and resume nodes
 	static async validateAuth(ctx: IWebhookFunctions) {
 		const req = ctx.getRequestObject();
 		let expectedAuth: ICredentialDataDecryptedObject | undefined;

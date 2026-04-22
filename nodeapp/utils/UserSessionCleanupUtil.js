@@ -1,6 +1,8 @@
 const cron = require('node-cron');
 const { Op } = require('sequelize');
 
+// runs every night at 3am (Bratislava time) to delete sessions that have already expired.
+// this keeps the sessions table from growing indefinitely.
 cron.schedule('0 3 * * *', async () => {
     try {
         logger.info('Cron: running expired sessions cleanup');

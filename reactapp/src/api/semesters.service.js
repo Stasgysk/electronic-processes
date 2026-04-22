@@ -1,3 +1,11 @@
+// Semester API calls — admin management of academic semesters.
+//
+// Basic CRUD: getSemesters / createSemester / updateSemester / deleteSemester.
+// activateSemester — marks a semester as the current one.
+// previewTransition — returns a dry-run of which student org unit assignments
+//                     would change when moving students from one semester to another.
+// transitionStudents — executes the student migration between semesters.
+// copyProfessors    — copies professor role assignments from one semester to another.
 import gsAxios from "./gsAxios";
 
 export const getSemesters = () =>

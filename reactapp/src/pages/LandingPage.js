@@ -1,3 +1,13 @@
+// Shown to unauthenticated users — the only page without the Header.
+//
+// Split layout: left branding panel, right login card.
+// The single login action is redirectToSSO() from AuthContext, which sends
+// the user to the TUKE SSO2 identity provider.  There is no local
+// username/password login.
+//
+// The language toggle here duplicates the one in Header because the Header
+// is not rendered on this page.  Chosen language is persisted in localStorage.
+
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';

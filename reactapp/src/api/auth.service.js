@@ -1,3 +1,8 @@
+// Auth API calls — login, token refresh, and logout.
+// login uses application/x-www-form-urlencoded because the backend expects
+// the SSO token in form-encoded format.
+// refresh sends the CSRF token in the x-csrf-token header as required by
+// the CSRF middleware on the backend.
 import gsAxios from "./gsAxios";
 
 export const login = (body) => {

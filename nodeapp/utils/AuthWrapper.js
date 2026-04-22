@@ -1,3 +1,6 @@
+// Middleware that protects all routes. Two ways to get through:
+// 1. Internal service call with a shared secret in the x-service-auth header (used by n8n callbacks)
+// 2. Normal user session via session_id cookie
 const authWrapper = ({
                          excludedRoutes = [],
                          internalSecret = null,
@@ -8,6 +11,7 @@ const authWrapper = ({
         const path = req.path;
         const method = req.method.toLowerCase();
 
+        // check if this route+method combo is on the excluded list (e.g. /auth/login)
         const isExcluded = excludedRoutes.some(
             route =>
                 (route.path instanceof RegExp
@@ -18,6 +22,7 @@ const authWrapper = ({
 
         if (isExcluded) return next();
 
+        // n8n and other internal services use the shared secret instead of a user session
         if (isInternalRequest) {
             req.authType = 'internal';
             return next();
@@ -39,6 +44,7 @@ const authWrapper = ({
                 return res.status(401).json(resBuilder.fail('Session expired'));
             }
 
+            // attach user id to the request so route handlers know who is calling
             req.userId = session.userId;
             req.authType = 'session';
             next();
